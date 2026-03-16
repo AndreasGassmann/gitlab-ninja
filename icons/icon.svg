@@ -1,0 +1,36 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#171321" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#drop-shadow)">
+    <polygon points="64,64 32,64 4,4" fill="#C32E16" />
+    <polygon points="64,64 4,4 64,32" fill="#E24329" />
+
+    <polygon points="64,64 64,32 124,4" fill="#FC6D26" />
+    <polygon points="64,64 124,4 96,64" fill="#E24329" />
+
+    <polygon points="64,64 96,64 124,124" fill="#FC6D26" />
+    <polygon points="64,64 124,124 64,96" fill="#FCA326" />
+
+    <polygon points="64,64 64,96 4,124" fill="#FC6D26" />
+    <polygon points="64,64 4,124 32,64" fill="#E24329" />
+
+    <polygon points="64,64 48,48 64,22" fill="#473B63" />
+    <polygon points="64,64 64,22 80,48" fill="#2D2540" />
+
+    <polygon points="64,64 80,48 106,64" fill="#473B63" />
+    <polygon points="64,64 106,64 80,80" fill="#2D2540" />
+
+    <polygon points="64,64 48,80 64,106" fill="#473B63" />
+    <polygon points="64,64 64,106 80,80" fill="#2D2540" />
+
+    <polygon points="64,64 48,48 22,64" fill="#473B63" />
+    <polygon points="64,64 22,64 48,80" fill="#2D2540" />
+  </g>
+
+  <circle cx="64" cy="64" r="14" fill="#FFFFFF" />
+  <circle cx="64" cy="64" r="6" fill="#E24329" />
+</svg>

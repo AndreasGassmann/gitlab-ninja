@@ -1,0 +1,54 @@
+{
+  "name": "gitlab-ninja",
+  "version": "1.0.0",
+  "description": "Browser extension that enhances GitLab boards with auto-assignment, time tracking, and quick estimates",
+  "scripts": {
+    "dev": "webpack --mode development --watch",
+    "build": "webpack --mode production",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write 'src/**/*.{ts,css,html}'",
+    "format:check": "prettier --check 'src/**/*.{ts,css,html}'",
+    "package:chrome": "./scripts/package.sh chrome",
+    "package:firefox": "./scripts/package.sh firefox",
+    "package:safari": "./scripts/package.sh safari",
+    "package:all": "./scripts/package.sh all",
+    "check": "npm run type-check && npm run lint && npm run format:check && npm run build",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "gitlab",
+    "browser-extension",
+    "productivity",
+    "time-tracking",
+    "project-management"
+  ],
+  "author": "AndreasGassmann",
+  "license": "MIT",
+  "homepage": "https://github.com/AndreasGassmann/gitlab-ninja",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndreasGassmann/gitlab-ninja.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AndreasGassmann/gitlab-ninja/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.2",
+    "eslint": "^8.57.0",
+    "prettier": "^3.8.1",
+    "sharp": "^0.34.5",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

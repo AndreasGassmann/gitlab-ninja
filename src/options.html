@@ -1,0 +1,2149 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>GitLab Ninja - Dashboard</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-deep: #0f1117;
+        --bg-surface: #181a22;
+        --bg-raised: #1e2030;
+        --bg-hover: #252839;
+        --border: rgba(255, 255, 255, 0.06);
+        --border-focus: rgba(255, 135, 53, 0.4);
+        --text-primary: #e8e9ed;
+        --text-secondary: #8b8fa3;
+        --text-muted: #5c6078;
+        --accent: #ff8735;
+        --accent-dim: rgba(255, 135, 53, 0.12);
+        --accent-glow: rgba(255, 135, 53, 0.25);
+        --green: #34d399;
+        --green-dim: rgba(52, 211, 153, 0.12);
+        --green-text: #34d399;
+        --red: #f87171;
+        --red-dim: rgba(248, 113, 113, 0.12);
+        --amber: #fbbf24;
+        --amber-dim: rgba(251, 191, 36, 0.12);
+        --blue: #60a5fa;
+        --blue-dim: rgba(96, 165, 250, 0.12);
+        --purple: #a78bfa;
+        --purple-dim: rgba(167, 139, 250, 0.12);
+        --radius: 12px;
+        --radius-sm: 8px;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+      }
+
+      /* ── Light Theme ── */
+      html.theme-light {
+        --bg-deep: #f5f5f7;
+        --bg-surface: #ffffff;
+        --bg-raised: #f0f0f3;
+        --bg-hover: #e8e8ed;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-focus: rgba(255, 135, 53, 0.4);
+        --text-primary: #1a1a2e;
+        --text-secondary: #5c5c78;
+        --text-muted: #9090a8;
+        --accent: #e06818;
+        --accent-dim: rgba(224, 104, 24, 0.1);
+        --accent-glow: rgba(224, 104, 24, 0.18);
+        --green: #16a34a;
+        --green-dim: rgba(22, 163, 74, 0.1);
+        --green-text: #16a34a;
+        --red: #dc2626;
+        --red-dim: rgba(220, 38, 38, 0.1);
+        --amber: #d97706;
+        --amber-dim: rgba(217, 119, 6, 0.1);
+        --blue: #2563eb;
+        --blue-dim: rgba(37, 99, 235, 0.1);
+        --purple: #7c3aed;
+        --purple-dim: rgba(124, 58, 237, 0.1);
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      html.theme-light body::before {
+        opacity: 0;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          'DM Sans',
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        font-size: 14px;
+        color: var(--text-primary);
+        background: var(--bg-deep);
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+
+      /* ── Grain overlay ── */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        opacity: 0.02;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
+      }
+
+      /* ── Top Bar ── */
+      .topbar {
+        background: var(--bg-surface);
+        padding: 22px 0;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      .topbar::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 28px;
+        right: 28px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+      }
+      .topbar-inner {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .topbar-logo {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        filter: drop-shadow(0 2px 6px var(--accent-glow));
+      }
+      .topbar-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+      }
+      .topbar-title span {
+        color: var(--accent);
+      }
+      .topbar-sub {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-top: 1px;
+        font-weight: 400;
+      }
+      .topbar-settings-btn {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 8px 16px;
+        border-radius: var(--radius-sm);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .topbar-settings-btn:hover {
+        background: var(--bg-hover);
+        color: var(--accent);
+        border-color: var(--border-focus);
+      }
+
+      /* ── Container ── */
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 24px 28px 48px;
+      }
+
+      /* ── Page Views ── */
+      .page-view {
+        display: none;
+      }
+      .page-view.active {
+        display: block;
+      }
+
+      /* ── Cards ── */
+      .card {
+        background: var(--bg-surface);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border);
+        margin-bottom: 20px;
+      }
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      .card-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.2px;
+      }
+      .card-body {
+        padding: 22px;
+      }
+
+      /* ── Settings Form ── */
+      .form-row {
+        margin-bottom: 18px;
+      }
+      .form-row:last-child {
+        margin-bottom: 0;
+      }
+      .form-label {
+        display: block;
+        font-family: 'Outfit', sans-serif;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+      }
+      .form-input {
+        width: 100%;
+        max-width: 420px;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        font-family: inherit;
+        color: var(--text-primary);
+        background: var(--bg-raised);
+        outline: none;
+        transition: all 0.2s;
+      }
+      .form-input::placeholder {
+        color: var(--text-muted);
+      }
+      .form-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-dim);
+      }
+      .form-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 5px;
+      }
+      .form-hint code {
+        background: var(--bg-raised);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: var(--accent);
+      }
+      .btn-primary {
+        padding: 10px 22px;
+        background: linear-gradient(135deg, var(--accent) 0%, #ff5722 100%);
+        color: var(--bg-deep);
+        border: none;
+        border-radius: var(--radius-sm);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .btn-primary:hover {
+        box-shadow: 0 4px 16px var(--accent-glow);
+        transform: translateY(-1px);
+      }
+      .btn-primary:active {
+        transform: translateY(0);
+      }
+      .save-status {
+        display: inline-block;
+        margin-left: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .save-status.show {
+        opacity: 1;
+      }
+      .save-status.ok {
+        color: var(--green);
+      }
+      .save-status.err {
+        color: var(--red);
+      }
+
+      /* ── Week Nav ── */
+      .week-nav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .week-nav-btn {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        color: var(--text-secondary);
+      }
+      .week-nav-btn:hover {
+        background: var(--accent-dim);
+        border-color: var(--border-focus);
+        color: var(--accent);
+      }
+      .week-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+      .week-label-total {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        padding-left: 8px;
+      }
+
+      /* ── Day Cards ── */
+      .week-summary {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin-bottom: 22px;
+      }
+      .day-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 14px 12px;
+        text-align: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        user-select: none;
+      }
+      .day-card:hover {
+        border-color: var(--border-focus);
+        background: var(--accent-dim);
+      }
+      .day-card.today {
+        border-color: var(--border-focus);
+        background: var(--accent-dim);
+      }
+      .day-card.active {
+        border-color: var(--accent);
+        background: var(--accent-dim);
+        box-shadow:
+          0 0 0 2px var(--accent-dim),
+          0 0 16px var(--accent-dim);
+      }
+      .day-card-name {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+      .day-card.today .day-card-name,
+      .day-card.active .day-card-name {
+        color: var(--accent);
+      }
+      .day-card-date {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+        opacity: 0.6;
+      }
+      .day-card-hours {
+        font-family: 'Outfit', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text-primary);
+        letter-spacing: -0.5px;
+      }
+      .day-card-hours.zero {
+        color: var(--text-muted);
+        opacity: 0.4;
+      }
+
+      .week-total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 14px 0 0;
+        border-top: 1px solid var(--border);
+        margin-bottom: 22px;
+      }
+      .week-filter-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .week-filter-clear {
+        font-size: 11px;
+        color: var(--text-muted);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: underline;
+        transition: color 0.15s;
+      }
+      .week-filter-clear:hover {
+        color: var(--accent);
+      }
+      .week-total-right {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .week-total-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+      .week-total-value {
+        font-family: 'Outfit', sans-serif;
+        font-size: 26px;
+        font-weight: 800;
+        color: var(--text-primary);
+        letter-spacing: -0.5px;
+      }
+
+      /* ── Issues Table ── */
+      .issues-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .issues-table th {
+        text-align: left;
+        font-family: 'Outfit', sans-serif;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 10px 14px;
+        border-bottom: 2px solid var(--border);
+      }
+      .issues-table th:last-child,
+      .issues-table td:last-child {
+        text-align: right;
+      }
+      .issues-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      .issues-table tr:last-child td {
+        border-bottom: none;
+      }
+      .issues-table tr:hover td {
+        background: var(--bg-raised);
+      }
+
+      .issue-link {
+        color: var(--text-primary);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 13px;
+        transition: color 0.15s;
+      }
+      .issue-link:hover {
+        color: var(--accent);
+      }
+      .issue-iid {
+        color: var(--text-muted);
+        font-weight: 400;
+        margin-right: 4px;
+      }
+      .issue-project {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .bar-cell {
+        min-width: 100px;
+      }
+      .progress-bar-track {
+        width: 100%;
+        height: 6px;
+        background: var(--bg-hover);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .progress-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.4s ease;
+      }
+      .progress-bar-fill.green {
+        background: var(--green);
+      }
+      .progress-bar-fill.amber {
+        background: var(--amber);
+      }
+      .progress-bar-fill.red {
+        background: var(--red);
+      }
+      .progress-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 3px;
+      }
+
+      .date-cell {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      .time-cell {
+        font-family: 'Outfit', sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      /* ── Breakdown Section ── */
+      .breakdown-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 22px;
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      .breakdown-section-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-bottom: 12px;
+      }
+      .breakdown-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 7px 0;
+      }
+      .breakdown-item + .breakdown-item {
+        border-top: 1px solid var(--border);
+      }
+      .breakdown-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+      .breakdown-bar-wrap {
+        flex: 1;
+        margin: 0 12px;
+        min-width: 60px;
+      }
+      .breakdown-bar-track {
+        width: 100%;
+        height: 5px;
+        background: var(--bg-hover);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .breakdown-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: var(--accent);
+        transition: width 0.3s ease;
+      }
+      .breakdown-time {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+        min-width: 48px;
+        text-align: right;
+      }
+      .breakdown-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      /* ── Estimate Accuracy Section ── */
+      .accuracy-section {
+        margin-bottom: 22px;
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      .accuracy-header {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .accuracy-header-badge {
+        font-family: 'Outfit', sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 2px 8px;
+        border-radius: 5px;
+        background: var(--green-dim);
+        color: var(--green);
+        border: 1px solid rgba(52, 211, 153, 0.2);
+      }
+      .accuracy-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .accuracy-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+      }
+      .accuracy-item + .accuracy-item {
+        border-top: 1px solid var(--border);
+      }
+      .accuracy-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        min-width: 80px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .accuracy-bar-wrap {
+        flex: 1;
+        margin: 0 12px;
+        min-width: 60px;
+        position: relative;
+      }
+      .accuracy-bar-track {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-hover);
+        border-radius: 4px;
+        overflow: visible;
+        position: relative;
+      }
+      .accuracy-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+      .accuracy-bar-marker {
+        position: absolute;
+        top: -3px;
+        width: 2px;
+        height: 14px;
+        background: var(--text-secondary);
+        border-radius: 1px;
+      }
+      .accuracy-value {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+        min-width: 68px;
+        text-align: right;
+      }
+      .accuracy-value.good {
+        color: var(--green);
+      }
+      .accuracy-value.ok {
+        color: var(--amber);
+      }
+      .accuracy-value.bad {
+        color: var(--red);
+      }
+      .accuracy-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+      .accuracy-empty {
+        font-size: 13px;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 8px 0;
+      }
+
+      .day-card.weekend {
+        opacity: 0.5;
+      }
+      .day-card.weekend:hover {
+        opacity: 1;
+      }
+
+      .status-cell {
+        white-space: nowrap;
+      }
+      .label-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+
+      /* ── Timelog Sub-rows ── */
+      .timelog-row td {
+        padding: 6px 14px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+      }
+      .timelog-row:last-child td,
+      .timelog-row + .issue-row td {
+        border-bottom: 1px solid var(--border) !important;
+      }
+      .issue-row + .timelog-row td:first-child {
+        padding-top: 4px !important;
+      }
+      .timelog-indent {
+        display: inline-block;
+        width: 18px;
+        border-left: 2px solid var(--border);
+        margin-right: 10px;
+        height: 14px;
+        vertical-align: middle;
+      }
+      .timelog-desc-cell {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .text-muted {
+        color: var(--text-muted);
+        font-style: italic;
+      }
+      .timelog-row.timelog-dim td {
+        opacity: 0.35;
+      }
+      .timelog-row.timelog-dim:hover td {
+        opacity: 0.6;
+      }
+      .timelog-field-display,
+      .timelog-summary-display {
+        cursor: pointer;
+        border-bottom: 1px dashed transparent;
+        transition: all 0.15s;
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+      .timelog-field-display:hover,
+      .timelog-summary-display:hover {
+        border-bottom-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+      .timelog-editable-cell {
+        white-space: nowrap;
+      }
+      .timelog-edit-wrapper {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .timelog-edit-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .timelog-save-btn,
+      .timelog-cancel-btn {
+        padding: 2px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.15s;
+      }
+      .timelog-save-btn {
+        background: var(--accent);
+        color: var(--bg-deep);
+      }
+      .timelog-save-btn:hover {
+        box-shadow: 0 2px 8px var(--accent-glow);
+      }
+      .timelog-save-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .timelog-cancel-btn {
+        background: var(--bg-hover);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+      }
+      .timelog-cancel-btn:hover {
+        color: var(--text-primary);
+      }
+      .timelog-inline-input {
+        padding: 3px 8px;
+        border: 1px solid var(--border-focus);
+        border-radius: 4px;
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        font-size: 12px;
+        font-family: inherit;
+        outline: none;
+        color-scheme: dark;
+        width: 100%;
+        max-width: 160px;
+      }
+      .timelog-inline-input:focus {
+        box-shadow: 0 0 0 2px var(--accent-dim);
+      }
+      .timelog-row .time-cell {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+      .timelog-add-row td {
+        padding-top: 2px !important;
+        padding-bottom: 10px !important;
+      }
+      .timelog-add-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: all 0.15s;
+      }
+      .timelog-add-btn:hover {
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+      .timelog-add-form {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+
+      /* ── Loading / Empty ── */
+      .loading-state,
+      .empty-state {
+        padding: 48px 22px;
+        text-align: center;
+        color: var(--text-muted);
+      }
+      .loading-state .spinner {
+        display: inline-block;
+        width: 22px;
+        height: 22px;
+        border: 2.5px solid var(--bg-hover);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: 10px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .empty-state-icon {
+        font-size: 32px;
+        opacity: 0.25;
+        margin-bottom: 8px;
+      }
+      .empty-state-text {
+        font-size: 14px;
+      }
+
+      /* ── View Toggle ── */
+      .view-toggle {
+        display: flex;
+        gap: 4px;
+      }
+      .view-toggle-btn {
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: 'Outfit', sans-serif;
+      }
+      .view-toggle-btn:hover {
+        border-color: var(--border-focus);
+        color: var(--accent);
+      }
+      .view-toggle-btn.active {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* ── Calendar Grid ── */
+      .cal-week-total {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .cal-weekend-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+        user-select: none;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 500;
+      }
+      .cal-weekend-toggle input {
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .cal-grid-wrapper {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+      .cal-header-row {
+        display: grid;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-raised);
+      }
+      .cal-time-header {
+        padding: 8px;
+      }
+      .cal-day-header {
+        padding: 10px 8px;
+        text-align: center;
+        border-left: 1px solid var(--border);
+      }
+      .cal-day-header.cal-today {
+        background: var(--accent-dim);
+      }
+      .cal-day-header.cal-weekend {
+        opacity: 0.6;
+      }
+      .cal-day-name {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .cal-day-header.cal-today .cal-day-name {
+        color: var(--accent);
+      }
+      .cal-day-date {
+        font-size: 11px;
+        color: var(--text-muted);
+        opacity: 0.6;
+        margin-top: 2px;
+      }
+      .cal-day-total {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-top: 4px;
+      }
+      .cal-body {
+        display: grid;
+        grid-template-columns: 60px 1fr;
+        max-height: 820px;
+        overflow-y: auto;
+      }
+      .cal-time-column {
+        position: relative;
+        border-right: 1px solid var(--border);
+      }
+      .cal-time-label {
+        position: absolute;
+        right: 8px;
+        font-size: 10px;
+        color: var(--text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-weight: 500;
+        transform: translateY(-50%);
+      }
+      .cal-days-container {
+        display: grid;
+        position: relative;
+      }
+      .cal-day-column {
+        position: relative;
+        border-left: 1px solid var(--border);
+      }
+      .cal-day-column.cal-weekend {
+        background: rgba(255, 255, 255, 0.01);
+      }
+      .cal-grid-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--border);
+        pointer-events: none;
+      }
+      .cal-grid-line-half {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .cal-now-line {
+        position: absolute;
+        left: -1px;
+        right: 0;
+        height: 2px;
+        background: var(--red);
+        z-index: 10;
+        pointer-events: none;
+      }
+      .cal-now-line::before {
+        content: '';
+        position: absolute;
+        left: -4px;
+        top: -3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--red);
+      }
+      .cal-block {
+        position: absolute;
+        border-radius: 4px;
+        padding: 4px 6px;
+        cursor: grab;
+        overflow: hidden;
+        z-index: 5;
+        transition: box-shadow 0.15s;
+        min-height: 20px;
+        right: 2px;
+      }
+      .cal-block:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        z-index: 6;
+      }
+      .cal-block.cal-dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+      }
+      .cal-block-meta {
+        font-size: 10px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cal-block-duration {
+        font-weight: 700;
+        font-family: 'Outfit', sans-serif;
+      }
+      .cal-block-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-primary);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .cal-block-note {
+        font-size: 10px;
+        color: var(--text-secondary);
+        font-style: italic;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .cal-block-resize-handle {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        cursor: ns-resize;
+        background: transparent;
+      }
+      .cal-block-resize-handle:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .cal-day-column-clickarea {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        cursor: crosshair;
+      }
+
+      /* ── Month View ── */
+      .cal-month-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background: var(--border);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+      }
+      .cal-month-header-cell {
+        background: var(--bg-raised);
+        padding: 8px;
+        text-align: center;
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .cal-month-cell {
+        background: var(--bg-surface);
+        padding: 10px;
+        min-height: 100px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .cal-month-cell:hover {
+        background: var(--bg-raised);
+      }
+      .cal-month-cell.cal-today {
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
+      .cal-month-cell.cal-other-month {
+        opacity: 0.3;
+      }
+      .cal-month-date {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+      }
+      .cal-month-hours {
+        font-family: 'Outfit', sans-serif;
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text-primary);
+      }
+      .cal-month-hours.zero {
+        color: var(--text-muted);
+        opacity: 0.3;
+      }
+      .cal-month-dots {
+        display: flex;
+        gap: 3px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+      .cal-month-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+
+      /* ── Calendar Popover ── */
+      .cal-popover {
+        position: fixed;
+        z-index: 100;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 16px;
+        box-shadow: var(--shadow-md);
+        min-width: 280px;
+      }
+      .cal-popover-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+      }
+      .cal-popover .form-row {
+        margin-bottom: 10px;
+      }
+      .cal-popover .form-label {
+        font-size: 10px;
+        margin-bottom: 4px;
+      }
+      .cal-popover select.form-input {
+        max-width: 100%;
+      }
+      .cal-popover textarea.form-input {
+        font-family: inherit;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .cal-popover-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .cal-popover-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 99;
+        background: transparent;
+      }
+
+      /* ── Settings Tabs ── */
+      .settings-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 0 22px;
+      }
+      .settings-tab {
+        padding: 10px 18px;
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-secondary);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .settings-tab:hover {
+        color: var(--text-primary);
+      }
+      .settings-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .settings-tab-content {
+        display: none;
+        padding: 22px;
+      }
+      .settings-tab-content.active {
+        display: block;
+      }
+
+      /* ── Toggle Switch ── */
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--bg-hover);
+        border-radius: 22px;
+        transition: 0.2s;
+        border: 1px solid var(--border);
+      }
+      .toggle-slider::before {
+        content: '';
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background: var(--text-muted);
+        border-radius: 50%;
+        transition: 0.2s;
+      }
+      .toggle-switch input:checked + .toggle-slider {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+      }
+      .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(18px);
+        background: var(--accent);
+      }
+
+      /* ── Notification Cards ── */
+      .notif-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+
+      /* ── Color Pickers ── */
+      .color-section {
+        margin-bottom: 24px;
+      }
+      .color-section-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 14px;
+        letter-spacing: -0.2px;
+      }
+      .color-section-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 16px;
+        margin-top: -8px;
+      }
+      .color-picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .color-picker-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        transition: border-color 0.15s;
+      }
+      .color-picker-item:hover {
+        border-color: var(--border-focus);
+      }
+      .color-picker-swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+        position: relative;
+        overflow: hidden;
+      }
+      .color-picker-swatch::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      .color-picker-swatch::-webkit-color-swatch {
+        border: none;
+        border-radius: 4px;
+      }
+      .color-picker-swatch::-moz-color-swatch {
+        border: none;
+        border-radius: 4px;
+      }
+      .color-picker-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1.2;
+      }
+      .color-picker-desc {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 1px;
+      }
+      .color-picker-hex {
+        margin-left: auto;
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+        letter-spacing: 0.3px;
+      }
+
+      /* ── Project Colors ── */
+      .project-color-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .project-color-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 12px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        transition: border-color 0.15s;
+      }
+      .project-color-item:hover {
+        border-color: var(--border-focus);
+      }
+      .project-color-item.custom {
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .project-color-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        flex: 1;
+      }
+      .project-color-reset {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 16px;
+        cursor: pointer;
+        padding: 0 4px;
+        line-height: 1;
+        transition: color 0.15s;
+        font-family: sans-serif;
+      }
+      .project-color-reset:hover {
+        color: var(--red);
+      }
+
+      /* ── Default Palette Row ── */
+      .palette-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .palette-swatch-item {
+        display: flex;
+        align-items: center;
+      }
+      .palette-swatch-item .color-picker-swatch {
+        width: 28px;
+        height: 28px;
+      }
+
+      /* ── Preview Board ── */
+      .preview-section {
+        margin-top: 24px;
+      }
+      .preview-board {
+        background: var(--bg-deep);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .preview-card {
+        position: relative;
+        background: var(--bg-surface);
+        border-radius: 6px;
+        padding: 12px 14px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        transition: all 0.2s;
+        overflow: hidden;
+      }
+      .preview-card-border {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0;
+      }
+      .preview-card-progress {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 0;
+      }
+      .preview-card-body {
+        flex: 1;
+        min-width: 0;
+        padding-left: 4px;
+      }
+      .preview-card-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        line-height: 1.3;
+      }
+      .preview-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .preview-card-project {
+        font-size: 11px;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .preview-time-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 7px 1px 5px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: 'Outfit', monospace;
+        letter-spacing: -0.02em;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      .preview-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .preview-card-status {
+        font-family: 'Outfit', sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 2px 8px;
+        border-radius: 5px;
+        margin-left: auto;
+        white-space: nowrap;
+        align-self: center;
+      }
+
+      /* ── Reset Button ── */
+      .reset-colors-btn {
+        padding: 6px 14px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        font-family: 'Outfit', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .reset-colors-btn:hover {
+        border-color: rgba(248, 113, 113, 0.4);
+        color: var(--red);
+        background: var(--red-dim);
+      }
+
+      /* ── Individual Reset ── */
+      .color-reset-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: all 0.15s;
+        font-family: sans-serif;
+        line-height: 1;
+        margin-left: auto;
+      }
+      .color-reset-btn:hover {
+        color: var(--red);
+        background: var(--red-dim);
+      }
+      .color-reset-btn.hidden {
+        display: none;
+      }
+
+      /* ── Topbar Nav ── */
+      .topbar-nav {
+        display: flex;
+        gap: 4px;
+      }
+      .topbar-nav-btn {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 8px 18px;
+        border-radius: var(--radius-sm);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .topbar-nav-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        border-color: var(--border-focus);
+      }
+      .topbar-nav-btn.active {
+        background: var(--accent-dim);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* ── Preset Selector ── */
+      .preset-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .preset-chip {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid var(--border);
+        background: var(--bg-raised);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .preset-chip:hover {
+        border-color: var(--border-focus);
+        color: var(--text-primary);
+      }
+      .preset-chip.active {
+        border-color: var(--accent);
+        background: var(--accent-dim);
+        color: var(--accent);
+      }
+      .preset-dots {
+        display: flex;
+        gap: 3px;
+      }
+      .preset-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div style="display: flex; align-items: center; gap: 14px">
+          <div class="topbar-brand">
+            <div class="topbar-logo">
+              <svg width="32" height="32" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="64,64 32,64 4,4" fill="#C32E16" />
+                <polygon points="64,64 4,4 64,32" fill="#E24329" />
+                <polygon points="64,64 64,32 124,4" fill="#FC6D26" />
+                <polygon points="64,64 124,4 96,64" fill="#E24329" />
+                <polygon points="64,64 96,64 124,124" fill="#FC6D26" />
+                <polygon points="64,64 124,124 64,96" fill="#FCA326" />
+                <polygon points="64,64 64,96 4,124" fill="#FC6D26" />
+                <polygon points="64,64 4,124 32,64" fill="#E24329" />
+                <polygon points="64,64 48,48 64,22" fill="#473B63" />
+                <polygon points="64,64 64,22 80,48" fill="#2D2540" />
+                <polygon points="64,64 80,48 106,64" fill="#473B63" />
+                <polygon points="64,64 106,64 80,80" fill="#2D2540" />
+                <polygon points="64,64 48,80 64,106" fill="#473B63" />
+                <polygon points="64,64 64,106 80,80" fill="#2D2540" />
+                <polygon points="64,64 48,48 22,64" fill="#473B63" />
+                <polygon points="64,64 22,64 48,80" fill="#2D2540" />
+                <circle cx="64" cy="64" r="14" fill="#FFFFFF" />
+                <circle cx="64" cy="64" r="6" fill="#E24329" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="topbar-title">GitLab <span>Ninja</span></div>
+            <div class="topbar-sub">Time Tracking Dashboard</div>
+          </div>
+        </div>
+        <div class="topbar-nav">
+          <button class="topbar-nav-btn" id="myBoardBtn" title="Open your personal board">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+            My Board
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="opacity: 0.5"
+            >
+              <path d="M7 17L17 7" />
+              <path d="M7 7h10v10" />
+            </svg>
+          </button>
+          <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px"></div>
+          <button class="topbar-nav-btn active" data-page="overview">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+            Overview
+          </button>
+          <button class="topbar-nav-btn" data-page="settings">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+              />
+            </svg>
+            Settings
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Page: Overview -->
+      <div class="page-view active" id="pageOverview">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Weekly Overview</div>
+            <div class="view-toggle">
+              <button class="view-toggle-btn active" data-view="list">List</button>
+              <button class="view-toggle-btn" data-view="week">Week</button>
+              <button class="view-toggle-btn" data-view="month">Month</button>
+            </div>
+            <div class="week-nav">
+              <button class="week-nav-btn" id="weekPrev" title="Previous week">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M10 3L5 8l5 5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+              <span class="week-label" id="weekLabel"></span>
+              <span class="week-label-total" id="weekLabelTotal"></span>
+              <button class="week-nav-btn" id="weekNext" title="Next week">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M6 3l5 5-5 5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="card-body" id="weekContent">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <div>Loading weekly data...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page: Settings -->
+      <div class="page-view" id="pageSettings">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Settings</div>
+          </div>
+          <div class="settings-tabs">
+            <button class="settings-tab active" data-settings-tab="connection">Connection</button>
+            <button class="settings-tab" data-settings-tab="notifications">Notifications</button>
+            <button class="settings-tab" data-settings-tab="appearance">Appearance</button>
+            <button class="settings-tab" data-settings-tab="about">About</button>
+          </div>
+
+          <div class="settings-tab-content active" data-settings-tab-content="connection">
+            <div class="form-row">
+              <label class="form-label" for="gitlabUrl">GitLab URL</label>
+              <input
+                class="form-input"
+                type="url"
+                id="gitlabUrl"
+                placeholder="https://gitlab.com"
+              />
+              <div class="form-hint">
+                Your GitLab instance URL. Auto-detected from open tabs, or set manually.
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="apiToken">Personal Access Token</label>
+              <input
+                class="form-input"
+                type="password"
+                id="apiToken"
+                placeholder="glpat-xxxxxxxxxxxx"
+              />
+              <div style="display: flex; gap: 8px; margin-top: 6px">
+                <button
+                  class="reset-colors-btn"
+                  id="copyTokenBtn"
+                  style="font-size: 11px; padding: 4px 10px"
+                >
+                  Copy
+                </button>
+                <button
+                  class="reset-colors-btn"
+                  id="clearTokenBtn"
+                  style="font-size: 11px; padding: 4px 10px"
+                >
+                  Clear
+                </button>
+              </div>
+              <div class="form-hint">
+                Requires <code>api</code> scope. Token is stored locally on this device only (never
+                synced).
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="boardGroupPath">Personal Board URL</label>
+              <input
+                class="form-input"
+                type="text"
+                id="boardGroupPath"
+                placeholder="https://gitlab.example.com/groups/myteam/-/boards?assignee_username=me"
+              />
+              <div class="form-hint">
+                Paste a full board URL or just the path. The <code>assignee_username</code> is
+                auto-set to your account.
+              </div>
+            </div>
+            <div class="form-row" style="display: flex; align-items: center">
+              <button class="btn-primary" id="saveBtn">Save Settings</button>
+              <span class="save-status" id="saveStatus"></span>
+            </div>
+          </div>
+
+          <div class="settings-tab-content" data-settings-tab-content="notifications">
+            <div
+              class="form-row"
+              style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px"
+            >
+              <label class="toggle-switch">
+                <input type="checkbox" id="notifEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+              <div>
+                <div style="font-weight: 600; font-size: 13px">Enable notifications</div>
+                <div class="form-hint" style="margin-top: 2px">
+                  Get browser reminders about unlogged time. Only fires on weekdays.
+                </div>
+              </div>
+            </div>
+
+            <div id="notifSettingsBody" style="opacity: 0.45; pointer-events: none">
+              <div class="notif-card">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="notifStartEnabled" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px">Start of day reminder</div>
+                    <div class="form-hint" style="margin-top: 2px">
+                      Notifies you in the morning if the previous workday's time is below the
+                      threshold.
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap">
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifStartTime">Time</label>
+                    <input class="form-input" type="time" id="notifStartTime" value="08:45" />
+                  </div>
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifStartHours"
+                      >Min. hours (previous day)</label
+                    >
+                    <input
+                      class="form-input"
+                      type="number"
+                      id="notifStartHours"
+                      value="8"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="notif-card">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="notifEndEnabled" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px">End of day reminder</div>
+                    <div class="form-hint" style="margin-top: 2px">
+                      Notifies you before leaving if today's logged time is below the threshold.
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap">
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifEndTime">Time</label>
+                    <input class="form-input" type="time" id="notifEndTime" value="17:00" />
+                  </div>
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifEndHours">Min. hours (today)</label>
+                    <input
+                      class="form-input"
+                      type="number"
+                      id="notifEndHours"
+                      value="8"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row" style="display: flex; align-items: center; margin-top: 4px">
+                <button
+                  class="btn-primary"
+                  id="testNotifBtn"
+                  style="
+                    background: var(--bg-raised);
+                    border: 1px solid var(--border);
+                    color: var(--text-secondary);
+                  "
+                >
+                  Test notification
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-content" data-settings-tab-content="appearance">
+            <div class="color-section">
+              <div class="color-section-title">Theme</div>
+              <div class="color-section-desc">
+                Syncs with your GitLab appearance setting, or override manually.
+              </div>
+              <div class="preset-row" id="themeModeRow">
+                <button class="preset-chip active" data-theme="auto">
+                  Auto (sync with GitLab)
+                </button>
+                <button class="preset-chip" data-theme="light">Light</button>
+                <button class="preset-chip" data-theme="dark">Dark</button>
+              </div>
+            </div>
+
+            <div class="color-section">
+              <div class="color-section-title">Issue Status Colors</div>
+              <div class="color-section-desc">
+                Customize the colors used for time tracking states on board cards.
+              </div>
+              <div class="preset-row" id="statusPresetRow"></div>
+              <div class="color-picker-grid" id="statusColorGrid"></div>
+            </div>
+
+            <div class="preview-section">
+              <div class="color-section-title">Preview</div>
+              <div class="preview-board" id="colorPreview"></div>
+            </div>
+
+            <div class="color-section" style="margin-top: 24px">
+              <div class="color-section-title">Project Colors</div>
+              <div class="color-section-desc">
+                Assign specific colors to projects. Detected projects appear after loading data.
+              </div>
+              <div class="preset-row" id="projectPresetRow"></div>
+              <div id="projectColorGrid"></div>
+            </div>
+
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-top: 20px;
+                padding-top: 16px;
+                border-top: 1px solid var(--border);
+              "
+            >
+              <button class="reset-colors-btn" id="resetColorsBtn">Reset All to Defaults</button>
+            </div>
+          </div>
+
+          <div class="settings-tab-content" data-settings-tab-content="about">
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                padding: 40px 20px;
+                gap: 24px;
+              "
+            >
+              <div style="font-size: 48px; line-height: 1">🥷</div>
+              <div>
+                <h2
+                  style="
+                    font-family: 'Outfit', sans-serif;
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    margin: 0 0 6px 0;
+                  "
+                >
+                  GitLab Ninja
+                </h2>
+                <div style="color: var(--text-secondary); font-size: 13px" id="aboutVersion">
+                  Version 1.0.0
+                </div>
+              </div>
+
+              <p
+                style="
+                  color: var(--text-secondary);
+                  font-size: 14px;
+                  line-height: 1.6;
+                  max-width: 400px;
+                  margin: 0;
+                "
+              >
+                Enhance your GitLab boards with time tracking, estimates, and more.
+              </p>
+
+              <a
+                href="https://github.com/AndreasGassmann/gitlab-ninja"
+                target="_blank"
+                rel="noopener noreferrer"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 8px;
+                  padding: 10px 20px;
+                  background: var(--bg-hover);
+                  border: 1px solid var(--border);
+                  border-radius: var(--radius-sm);
+                  color: var(--text-primary);
+                  text-decoration: none;
+                  font-size: 14px;
+                  font-weight: 500;
+                  transition: all 0.2s;
+                "
+                onmouseover="this.style.borderColor = 'var(--border-focus)'"
+                onmouseout="this.style.borderColor = 'var(--border)'"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"
+                  />
+                </svg>
+                View on GitHub
+              </a>
+
+              <div
+                style="
+                  margin-top: 16px;
+                  padding-top: 20px;
+                  border-top: 1px solid var(--border);
+                  color: var(--text-muted);
+                  font-size: 13px;
+                "
+              >
+                Made in Switzerland
+                <span style="margin-left: 4px">&#127464;&#127469;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

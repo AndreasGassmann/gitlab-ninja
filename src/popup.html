@@ -1,0 +1,1643 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-deep: #0f1117;
+        --bg-surface: #181a22;
+        --bg-raised: #1e2030;
+        --bg-hover: #252839;
+        --border: rgba(255, 255, 255, 0.06);
+        --border-focus: rgba(255, 135, 53, 0.4);
+        --text-primary: #e8e9ed;
+        --text-secondary: #8b8fa3;
+        --text-muted: #5c6078;
+        --accent: #ff8735;
+        --accent-dim: rgba(255, 135, 53, 0.12);
+        --accent-glow: rgba(255, 135, 53, 0.25);
+        --green: #34d399;
+        --green-dim: rgba(52, 211, 153, 0.12);
+        --green-text: #34d399;
+        --red: #f87171;
+        --red-dim: rgba(248, 113, 113, 0.12);
+        --amber: #fbbf24;
+        --amber-dim: rgba(251, 191, 36, 0.12);
+        --blue: #60a5fa;
+        --blue-dim: rgba(96, 165, 250, 0.12);
+        --purple: #a78bfa;
+        --purple-dim: rgba(167, 139, 250, 0.12);
+        --radius: 10px;
+        --radius-sm: 7px;
+      }
+
+      /* ── Light Theme ── */
+      html.theme-light {
+        --bg-deep: #f5f5f7;
+        --bg-surface: #ffffff;
+        --bg-raised: #f0f0f3;
+        --bg-hover: #e8e8ed;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-focus: rgba(255, 135, 53, 0.4);
+        --text-primary: #1a1a2e;
+        --text-secondary: #5c5c78;
+        --text-muted: #9090a8;
+        --accent: #e06818;
+        --accent-dim: rgba(224, 104, 24, 0.1);
+        --accent-glow: rgba(224, 104, 24, 0.18);
+        --green: #16a34a;
+        --green-dim: rgba(22, 163, 74, 0.1);
+        --green-text: #16a34a;
+        --red: #dc2626;
+        --red-dim: rgba(220, 38, 38, 0.1);
+        --amber: #d97706;
+        --amber-dim: rgba(217, 119, 6, 0.1);
+        --blue: #2563eb;
+        --blue-dim: rgba(37, 99, 235, 0.1);
+        --purple: #7c3aed;
+        --purple-dim: rgba(124, 58, 237, 0.1);
+      }
+      html.theme-light body::before {
+        opacity: 0;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        width: 380px;
+        min-height: 500px;
+        font-family:
+          'DM Sans',
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        font-size: 13px;
+        color: var(--text-primary);
+        background: var(--bg-deep);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Grain overlay ── */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        opacity: 0.025;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
+      }
+
+      /* ── Header ── */
+      .header {
+        padding: 16px 18px 0;
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      .header::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 18px;
+        right: 18px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+      }
+      .header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .header-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .header-logo {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        filter: drop-shadow(0 1px 4px var(--accent-glow));
+      }
+      .header-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+      }
+      .header-title span {
+        color: var(--accent);
+      }
+      .header-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .header-btn {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .header-btn:hover {
+        background: var(--bg-hover);
+        color: var(--accent);
+        border-color: var(--border-focus);
+      }
+
+      /* ── Tabs ── */
+      .tabs {
+        display: flex;
+        gap: 2px;
+        padding: 0 2px;
+      }
+      .tab {
+        flex: 1;
+        padding: 10px 0 11px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-family: 'Outfit', sans-serif;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        letter-spacing: 0.2px;
+      }
+      .tab:hover {
+        color: var(--text-secondary);
+      }
+      .tab.active {
+        color: var(--accent);
+      }
+      .tab .tab-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: var(--bg-deep);
+        font-family: 'Outfit', sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        margin-left: 4px;
+        vertical-align: middle;
+        line-height: 1;
+      }
+      .tab .tab-badge:empty {
+        display: none;
+      }
+      .tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 20%;
+        right: 20%;
+        height: 2px;
+        background: var(--accent);
+        border-radius: 2px 2px 0 0;
+        box-shadow: 0 0 8px var(--accent-glow);
+      }
+
+      /* ── Tab Panels ── */
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+
+      /* ── New Ticket Form ── */
+      .form-section {
+        padding: 16px 18px 18px;
+      }
+      .field-label {
+        display: block;
+        font-family: 'Outfit', sans-serif;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+      }
+      .field-input,
+      .field-select {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--text-primary);
+        background: var(--bg-raised);
+        outline: none;
+        transition: all 0.2s;
+        margin-bottom: 14px;
+      }
+      .field-input::placeholder {
+        color: var(--text-muted);
+      }
+      .field-input:focus,
+      .field-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-dim);
+      }
+      textarea.field-input {
+        height: 60px;
+        resize: vertical;
+      }
+      .project-autocomplete {
+        position: relative;
+        margin-bottom: 14px;
+      }
+      .project-autocomplete .field-input {
+        margin-bottom: 0;
+        padding-right: 28px;
+      }
+      .project-clear {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-muted);
+        font-size: 16px;
+        line-height: 1;
+        padding: 2px;
+        display: none;
+        transition: color 0.15s;
+      }
+      .project-clear:hover {
+        color: var(--accent);
+      }
+      .project-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 180px;
+        overflow-y: auto;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-top: none;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        z-index: 100;
+        display: none;
+      }
+      .project-dropdown::-webkit-scrollbar {
+        width: 4px;
+      }
+      .project-dropdown::-webkit-scrollbar-thumb {
+        background: var(--text-muted);
+        border-radius: 2px;
+      }
+      .project-option {
+        padding: 8px 12px;
+        font-size: 12.5px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: all 0.1s;
+      }
+      .project-option:hover,
+      .project-option.highlighted {
+        background: var(--accent-dim);
+        color: var(--accent);
+      }
+      .project-option mark {
+        background: transparent;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .project-no-results {
+        padding: 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+        text-align: center;
+        font-style: italic;
+      }
+      .project-loading {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin: 4px 0 8px;
+        font-style: italic;
+      }
+
+      .time-prefill-btns {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 14px;
+      }
+      .time-prefill {
+        padding: 2px 6px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .time-prefill:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .submit-btn {
+        width: 100%;
+        padding: 11px;
+        background: linear-gradient(135deg, var(--green) 0%, #10b981 100%);
+        color: var(--bg-deep);
+        border: none;
+        border-radius: var(--radius);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .submit-btn:hover {
+        box-shadow: 0 4px 16px rgba(52, 211, 153, 0.3);
+        transform: translateY(-1px);
+      }
+      .submit-btn:active {
+        transform: translateY(0);
+      }
+      .submit-btn:disabled {
+        background: var(--bg-hover);
+        color: var(--text-muted);
+        cursor: default;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .status-msg {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        display: none;
+        line-height: 1.4;
+      }
+      .status-msg.success {
+        display: block;
+        background: var(--green-dim);
+        border: 1px solid rgba(52, 211, 153, 0.2);
+        color: var(--green-text);
+      }
+      .status-msg.error {
+        display: block;
+        background: var(--red-dim);
+        border: 1px solid rgba(248, 113, 113, 0.2);
+        color: var(--red);
+      }
+      .status-msg a {
+        color: inherit;
+        font-weight: 700;
+        text-decoration: underline;
+      }
+
+      /* ── Today Tab ── */
+      .today-panel {
+        padding: 0;
+      }
+      .today-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+      .today-total {
+        font-family: 'Outfit', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text-primary);
+        letter-spacing: -0.5px;
+      }
+      .today-total-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      .today-refresh {
+        background: var(--accent-dim);
+        border: 1px solid rgba(255, 135, 53, 0.15);
+        color: var(--accent);
+        cursor: pointer;
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        transition: all 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .today-refresh:hover {
+        background: var(--accent-glow);
+        box-shadow: 0 2px 8px var(--accent-dim);
+      }
+      .today-refresh:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      .today-list {
+        max-height: 280px;
+        overflow-y: auto;
+      }
+      .today-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .today-list::-webkit-scrollbar-thumb {
+        background: var(--text-muted);
+        border-radius: 2px;
+      }
+
+      .today-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 18px;
+        border-bottom: 1px solid var(--border);
+        transition: background 0.15s;
+      }
+      .today-item:last-child {
+        border-bottom: none;
+      }
+      .today-item:hover {
+        background: var(--bg-hover);
+      }
+
+      .progress-ring {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        position: relative;
+      }
+      .progress-ring svg {
+        transform: rotate(-90deg);
+      }
+      .progress-ring-bg {
+        stroke: var(--bg-hover);
+      }
+      .progress-ring-fill {
+        transition: stroke-dashoffset 0.4s ease;
+      }
+      .progress-pct {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Outfit', sans-serif;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--text-secondary);
+      }
+
+      .today-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .today-title {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-decoration: none;
+        display: block;
+        transition: color 0.15s;
+      }
+      .today-title:hover {
+        color: var(--accent);
+      }
+      .today-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .today-label {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--bg-hover);
+        color: var(--text-secondary);
+      }
+      .today-label[data-label='done'] {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .today-label[data-label='doing'] {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .today-label[data-label='testing'] {
+        background: var(--amber-dim);
+        color: var(--amber);
+      }
+      .today-label[data-label='review'] {
+        background: var(--purple-dim);
+        color: var(--purple);
+      }
+      .today-time {
+        font-family: 'Outfit', sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .today-empty {
+        padding: 36px 18px;
+        text-align: center;
+        color: var(--text-muted);
+      }
+      .today-empty-icon {
+        font-size: 28px;
+        margin-bottom: 8px;
+        opacity: 0.3;
+      }
+      .today-empty-text {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .today-loading {
+        padding: 36px 18px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+      .spinner {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--bg-hover);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: 8px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Week Mini Chart (in Today) ── */
+      .week-mini {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        padding: 14px 18px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .week-mini-day {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .week-mini-bar-wrap {
+        width: 100%;
+        height: 40px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .week-mini-bar {
+        width: 100%;
+        max-width: 28px;
+        border-radius: 3px 3px 0 0;
+        background: var(--bg-hover);
+        transition:
+          height 0.3s ease,
+          background 0.3s ease;
+        min-height: 3px;
+      }
+      .week-mini-bar.has-time {
+        background: var(--accent-dim);
+        border: 1px solid rgba(255, 135, 53, 0.2);
+        border-bottom: none;
+      }
+      .week-mini-bar.today-bar.has-time {
+        background: linear-gradient(180deg, var(--accent) 0%, rgba(255, 135, 53, 0.6) 100%);
+        border-color: transparent;
+        box-shadow: 0 0 8px var(--accent-dim);
+      }
+      .week-mini-label {
+        font-family: 'Outfit', sans-serif;
+        font-size: 9.5px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .week-mini-label.today-label {
+        color: var(--accent);
+      }
+      .week-mini-hours {
+        font-family: 'Outfit', sans-serif;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        min-height: 12px;
+      }
+      .week-mini-hours.today-hours {
+        color: var(--accent);
+      }
+      .week-mini-total {
+        padding: 0 18px 12px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .week-mini-total-value {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-secondary);
+      }
+      .week-mini-total-label {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      /* ── Today Summary ── */
+      .today-summary-note {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-style: italic;
+      }
+
+      /* ── Footer ── */
+      .footer {
+        padding: 10px 18px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: center;
+        background: var(--bg-surface);
+      }
+      .footer-link {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        color: var(--text-muted);
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+        background: none;
+        transition: color 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .footer-link:hover {
+        color: var(--accent);
+      }
+
+      /* ── Quick Templates ── */
+      .quick-panel {
+        padding: 0;
+      }
+      .quick-list {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .quick-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .quick-list::-webkit-scrollbar-thumb {
+        background: var(--text-muted);
+        border-radius: 2px;
+      }
+
+      .quick-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--border);
+        transition: background 0.15s;
+        cursor: pointer;
+      }
+      .quick-item:last-child {
+        border-bottom: none;
+      }
+      .quick-item:hover {
+        background: var(--bg-hover);
+      }
+      .quick-item:active {
+        background: var(--accent-dim);
+      }
+
+      .quick-item-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-sm);
+        background: var(--accent-dim);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+        font-weight: 700;
+        font-family: 'Outfit', sans-serif;
+      }
+      .quick-item-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .quick-item-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .quick-item-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .quick-item-actions {
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .quick-item:hover .quick-item-actions {
+        opacity: 1;
+      }
+      .quick-item-action {
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+      .quick-item-action:hover {
+        background: var(--bg-raised);
+        color: var(--text-primary);
+      }
+      .quick-item-action.delete:hover {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+
+      .quick-item-status {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 5px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .quick-item-status.creating {
+        background: var(--amber-dim);
+        color: var(--amber);
+      }
+      .quick-item-status.done {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .quick-item-status.failed {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+
+      .quick-confirm {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .quick-confirm-btn {
+        padding: 4px 10px;
+        border-radius: 5px;
+        border: none;
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .quick-confirm-btn.confirm {
+        background: var(--green);
+        color: var(--bg-deep);
+      }
+      .quick-confirm-btn.confirm:hover {
+        box-shadow: 0 2px 8px rgba(52, 211, 153, 0.3);
+      }
+      .quick-confirm-btn.cancel {
+        background: var(--bg-hover);
+        color: var(--text-secondary);
+      }
+      .quick-confirm-btn.cancel:hover {
+        background: var(--bg-raised);
+        color: var(--text-primary);
+      }
+      .quick-issue-link {
+        color: inherit;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .quick-issue-link:hover {
+        text-decoration: underline;
+      }
+
+      .quick-add-bar {
+        padding: 10px 18px;
+        border-top: 1px solid var(--border);
+      }
+      .quick-add-btn {
+        width: 100%;
+        padding: 9px;
+        background: var(--bg-raised);
+        border: 1.5px dashed var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        font-family: 'Outfit', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .quick-add-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .quick-form {
+        border-top: 1px solid var(--border);
+        background: var(--bg-surface);
+      }
+      .quick-form-inner {
+        padding: 14px 18px 18px;
+      }
+      .quick-form-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+      }
+
+      /* ── Notes ── */
+      .notes-panel {
+        padding: 0;
+      }
+      .notes-list {
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .notes-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .notes-list::-webkit-scrollbar-thumb {
+        background: var(--text-muted);
+        border-radius: 2px;
+      }
+      .notes-list:empty::after {
+        content: 'No notes yet';
+        display: block;
+        padding: 32px 18px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+      .note-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 18px;
+        border-bottom: 1px solid var(--border);
+        transition: background 0.15s;
+      }
+      .note-item:last-child {
+        border-bottom: none;
+      }
+      .note-item:hover {
+        background: var(--bg-hover);
+      }
+      .note-text {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text-primary);
+        min-width: 0;
+        word-break: break-word;
+      }
+      .note-delete {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: all 0.15s;
+      }
+      .note-item:hover .note-delete {
+        opacity: 1;
+      }
+      .note-delete:hover {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+      .note-item[draggable='true'] {
+        cursor: grab;
+      }
+      .note-item[draggable='true']:active {
+        cursor: grabbing;
+      }
+      .note-item.drag-over {
+        border-top: 2px solid var(--accent);
+        padding-top: 7px;
+      }
+      .note-item.dragging {
+        opacity: 0.3;
+      }
+      .note-drag-handle {
+        flex-shrink: 0;
+        color: var(--text-muted);
+        cursor: grab;
+        opacity: 0.4;
+        transition: opacity 0.15s;
+        display: flex;
+        align-items: center;
+      }
+      .note-item:hover .note-drag-handle {
+        opacity: 0.7;
+      }
+      .notes-input-bar {
+        padding: 10px 18px;
+        border-top: 1px solid var(--border);
+      }
+      .note-add-btn {
+        padding: 0 14px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(255, 135, 53, 0.15);
+        color: var(--accent);
+        border-radius: var(--radius-sm);
+        font-family: 'Outfit', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+      .note-add-btn:hover {
+        background: var(--accent-glow);
+        box-shadow: 0 2px 8px var(--accent-dim);
+      }
+
+      /* ── Animations ── */
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .tab-panel.active {
+        animation: fadeIn 0.2s ease;
+      }
+
+      /* ── Onboarding ── */
+      .onboarding-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: var(--bg-deep);
+        overflow: hidden;
+      }
+      .onboarding-track {
+        display: flex;
+        width: 400%;
+        height: calc(100% - 40px);
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .onboarding-step {
+        width: 380px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 28px;
+        text-align: center;
+      }
+      .onboarding-step .field-label,
+      .onboarding-step .field-input {
+        text-align: left;
+        width: 100%;
+      }
+      .onboarding-logo {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        filter: drop-shadow(0 2px 8px var(--accent-glow));
+      }
+      .onboarding-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+      }
+      .onboarding-title span {
+        color: var(--accent);
+      }
+      .onboarding-subtitle {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 28px;
+        line-height: 1.5;
+      }
+      .onboarding-btn-primary {
+        padding: 11px 28px;
+        background: linear-gradient(135deg, var(--accent) 0%, #e06818 100%);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        letter-spacing: 0.2px;
+      }
+      .onboarding-btn-primary:hover {
+        box-shadow: 0 4px 16px rgba(255, 135, 53, 0.35);
+        transform: translateY(-1px);
+      }
+      .onboarding-btn-primary:active {
+        transform: translateY(0);
+      }
+      .onboarding-btn-primary:disabled {
+        background: var(--bg-hover);
+        color: var(--text-muted);
+        cursor: default;
+        box-shadow: none;
+        transform: none;
+      }
+      .onboarding-btn-secondary {
+        padding: 11px 20px;
+        background: var(--bg-raised);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .onboarding-btn-secondary:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+      .onboarding-btn-ghost {
+        padding: 11px 20px;
+        background: transparent;
+        color: var(--text-muted);
+        border: none;
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: color 0.2s;
+      }
+      .onboarding-btn-ghost:hover {
+        color: var(--text-secondary);
+      }
+      .onboarding-btn-row {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        margin-top: 8px;
+      }
+      .onboarding-btn-row .onboarding-btn-primary {
+        flex: 1;
+      }
+      .onboarding-error {
+        width: 100%;
+        text-align: left;
+        font-size: 12px;
+        color: var(--red);
+        margin-top: -6px;
+        margin-bottom: 8px;
+        min-height: 18px;
+      }
+      .onboarding-hint {
+        width: 100%;
+        text-align: left;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: -10px;
+        margin-bottom: 12px;
+      }
+      .onboarding-hint a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .onboarding-hint a:hover {
+        text-decoration: underline;
+      }
+      .onboarding-hint.detected {
+        color: var(--green);
+      }
+      .onboarding-dots {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px 0;
+      }
+      .onboarding-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 6px;
+        background: var(--bg-hover);
+        transition: all 0.3s ease;
+      }
+      .onboarding-dot.active {
+        width: 18px;
+        background: var(--accent);
+      }
+
+      /* Checkmark animation */
+      .onboarding-checkmark {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 20px;
+      }
+      .onboarding-checkmark .circle {
+        stroke: var(--green);
+        stroke-width: 3;
+        fill: none;
+        stroke-dasharray: 170;
+        stroke-dashoffset: 170;
+        animation: checkCircle 0.6s ease forwards;
+      }
+      .onboarding-checkmark .check {
+        stroke: var(--green);
+        stroke-width: 3;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 36;
+        stroke-dashoffset: 36;
+        animation: checkMark 0.4s ease forwards 0.5s;
+      }
+      @keyframes checkCircle {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes checkMark {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      .onboarding-features {
+        width: 100%;
+        text-align: left;
+        margin: 16px 0 24px;
+      }
+      .onboarding-feature {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+      .onboarding-feature-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: var(--accent-dim);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Onboarding overlay -->
+    <div id="onboarding" class="onboarding-overlay" style="display: none">
+      <div
+        style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          padding: 32px 24px;
+          text-align: center;
+        "
+      >
+        <div class="onboarding-logo">
+          <svg width="48" height="48" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="64,64 32,64 4,4" fill="#C32E16" />
+            <polygon points="64,64 4,4 64,32" fill="#E24329" />
+            <polygon points="64,64 64,32 124,4" fill="#FC6D26" />
+            <polygon points="64,64 124,4 96,64" fill="#E24329" />
+            <polygon points="64,64 96,64 124,124" fill="#FC6D26" />
+            <polygon points="64,64 124,124 64,96" fill="#FCA326" />
+            <polygon points="64,64 64,96 4,124" fill="#FC6D26" />
+            <polygon points="64,64 4,124 32,64" fill="#E24329" />
+            <polygon points="64,64 48,48 64,22" fill="#473B63" />
+            <polygon points="64,64 64,22 80,48" fill="#2D2540" />
+            <polygon points="64,64 80,48 106,64" fill="#473B63" />
+            <polygon points="64,64 106,64 80,80" fill="#2D2540" />
+            <polygon points="64,64 48,80 64,106" fill="#473B63" />
+            <polygon points="64,64 64,106 80,80" fill="#2D2540" />
+            <polygon points="64,64 48,48 22,64" fill="#473B63" />
+            <polygon points="64,64 22,64 48,80" fill="#2D2540" />
+            <circle cx="64" cy="64" r="14" fill="#FFFFFF" />
+            <circle cx="64" cy="64" r="6" fill="#E24329" />
+          </svg>
+        </div>
+        <div class="onboarding-title">GitLab <span>Ninja</span></div>
+        <div class="onboarding-subtitle" style="margin-bottom: 24px">
+          Track time, create tickets, and manage your GitLab workflow — all from your browser
+          toolbar.
+        </div>
+        <div
+          style="
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.5;
+          "
+        >
+          To get started, open Settings and add your GitLab URL and API token.
+        </div>
+        <button class="onboarding-btn-primary" id="obOpenSettings" style="width: 100%">
+          Open Settings
+        </button>
+      </div>
+    </div>
+
+    <!-- Header with tabs -->
+    <div class="header">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="header-logo">
+            <svg width="24" height="24" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="64,64 32,64 4,4" fill="#C32E16" />
+              <polygon points="64,64 4,4 64,32" fill="#E24329" />
+              <polygon points="64,64 64,32 124,4" fill="#FC6D26" />
+              <polygon points="64,64 124,4 96,64" fill="#E24329" />
+              <polygon points="64,64 96,64 124,124" fill="#FC6D26" />
+              <polygon points="64,64 124,124 64,96" fill="#FCA326" />
+              <polygon points="64,64 64,96 4,124" fill="#FC6D26" />
+              <polygon points="64,64 4,124 32,64" fill="#E24329" />
+              <polygon points="64,64 48,48 64,22" fill="#473B63" />
+              <polygon points="64,64 64,22 80,48" fill="#2D2540" />
+              <polygon points="64,64 80,48 106,64" fill="#473B63" />
+              <polygon points="64,64 106,64 80,80" fill="#2D2540" />
+              <polygon points="64,64 48,80 64,106" fill="#473B63" />
+              <polygon points="64,64 64,106 80,80" fill="#2D2540" />
+              <polygon points="64,64 48,48 22,64" fill="#473B63" />
+              <polygon points="64,64 22,64 48,80" fill="#2D2540" />
+              <circle cx="64" cy="64" r="14" fill="#FFFFFF" />
+              <circle cx="64" cy="64" r="6" fill="#E24329" />
+            </svg>
+          </div>
+          <span class="header-title">GitLab <span>Ninja</span></span>
+        </div>
+        <div class="header-actions">
+          <a
+            class="header-btn"
+            id="boardLink"
+            title="My Board"
+            href="#"
+            target="_blank"
+            style="text-decoration: none"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+          </a>
+          <button class="header-btn" id="optionsBtn" title="Weekly Overview (full page)">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <rect
+                x="1"
+                y="3"
+                width="14"
+                height="11"
+                rx="2"
+                stroke="currentColor"
+                stroke-width="1.3"
+              />
+              <path
+                d="M1 7h14M5 3v-1M11 3v-1"
+                stroke="currentColor"
+                stroke-width="1.3"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="today">Today</button>
+        <button class="tab" data-tab="create">New Ticket</button>
+        <button class="tab" data-tab="quick">Templates</button>
+        <button class="tab" data-tab="notes">
+          Notes<span class="tab-badge" id="notesBadge"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab: New Ticket -->
+    <div class="tab-panel" id="panel-create">
+      <div class="form-section">
+        <label class="field-label" for="projectInput">Project</label>
+        <div class="project-autocomplete" id="projectAutocomplete">
+          <input
+            class="field-input"
+            type="text"
+            id="projectInput"
+            placeholder="Search projects..."
+            autocomplete="off"
+          />
+          <button class="project-clear" id="projectClear" type="button">&times;</button>
+          <div class="project-dropdown" id="projectDropdown"></div>
+        </div>
+        <div class="project-loading" id="projectLoading" style="display: none">
+          Loading projects...
+        </div>
+
+        <label class="field-label" for="ticketTitle">Title</label>
+        <input
+          class="field-input"
+          type="text"
+          id="ticketTitle"
+          placeholder="What did you work on?"
+        />
+
+        <label class="field-label" for="ticketDesc">Description</label>
+        <textarea class="field-input" id="ticketDesc" placeholder="Optional details..."></textarea>
+
+        <div style="display: flex; gap: 12px">
+          <div style="flex: 1">
+            <label class="field-label" for="ticketEstimate">Time Estimate</label>
+            <input
+              class="field-input"
+              type="text"
+              id="ticketEstimate"
+              placeholder="e.g. 1h"
+              style="margin-bottom: 4px"
+            />
+            <div class="time-prefill-btns" data-target="ticketEstimate">
+              <button class="time-prefill" data-value="15m">15m</button>
+              <button class="time-prefill" data-value="30m">30m</button>
+              <button class="time-prefill" data-value="45m">45m</button>
+              <button class="time-prefill" data-value="1h">1h</button>
+            </div>
+          </div>
+          <div style="flex: 1">
+            <label class="field-label" for="ticketSpent">Time Spent</label>
+            <input
+              class="field-input"
+              type="text"
+              id="ticketSpent"
+              placeholder="e.g. 30m"
+              style="margin-bottom: 4px"
+            />
+            <div class="time-prefill-btns" data-target="ticketSpent">
+              <button class="time-prefill" data-value="15m">15m</button>
+              <button class="time-prefill" data-value="30m">30m</button>
+              <button class="time-prefill" data-value="45m">45m</button>
+              <button class="time-prefill" data-value="1h">1h</button>
+            </div>
+          </div>
+        </div>
+
+        <label class="field-label" for="ticketSummary">Time Log Summary</label>
+        <input
+          class="field-input"
+          type="text"
+          id="ticketSummary"
+          placeholder="e.g. Implemented feature X"
+        />
+
+        <button class="submit-btn" id="submitBtn" disabled>Create Ticket</button>
+        <div class="status-msg" id="statusMsg"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Quick Templates -->
+    <div class="tab-panel" id="panel-quick">
+      <div class="quick-panel">
+        <div class="quick-list" id="quickList">
+          <div class="today-empty">
+            <div class="today-empty-icon" style="font-size: 22px">&#9889;</div>
+            <div class="today-empty-text">No templates yet</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px">
+              Add a recurring task template below
+            </div>
+          </div>
+        </div>
+        <div class="quick-add-bar">
+          <button class="quick-add-btn" id="quickAddBtn">+ New Template</button>
+        </div>
+        <div class="quick-form" id="quickForm" style="display: none">
+          <div class="quick-form-inner">
+            <div class="quick-form-title" id="quickFormTitle">New Template</div>
+            <input type="hidden" id="tplEditId" value="" />
+
+            <label class="field-label" for="tplName">Template Name</label>
+            <input class="field-input" type="text" id="tplName" placeholder="e.g. Daily standup" />
+
+            <label class="field-label" for="tplProject">Project</label>
+            <div class="project-autocomplete" id="tplProjectAutocomplete">
+              <input
+                class="field-input"
+                type="text"
+                id="tplProjectInput"
+                placeholder="Search projects..."
+                autocomplete="off"
+              />
+              <button class="project-clear" id="tplProjectClear" type="button">&times;</button>
+              <div class="project-dropdown" id="tplProjectDropdown"></div>
+            </div>
+
+            <label class="field-label" for="tplTitle">Issue Title</label>
+            <input class="field-input" type="text" id="tplTitle" placeholder="Ticket title" />
+
+            <label class="field-label" for="tplDesc">Description</label>
+            <textarea class="field-input" id="tplDesc" placeholder="Optional details..."></textarea>
+
+            <div style="display: flex; gap: 12px">
+              <div style="flex: 1">
+                <label class="field-label" for="tplEstimate">Estimate</label>
+                <input class="field-input" type="text" id="tplEstimate" placeholder="e.g. 1h" />
+              </div>
+              <div style="flex: 1">
+                <label class="field-label" for="tplSpent">Time Spent</label>
+                <input class="field-input" type="text" id="tplSpent" placeholder="e.g. 30m" />
+              </div>
+            </div>
+
+            <label class="field-label" for="tplSummary">Work Log Summary</label>
+            <input
+              class="field-input"
+              type="text"
+              id="tplSummary"
+              placeholder="e.g. Daily standup meeting"
+            />
+
+            <div style="display: flex; gap: 8px; margin-top: 2px">
+              <button class="submit-btn" id="tplSaveBtn" style="flex: 1">Save Template</button>
+              <button
+                class="submit-btn"
+                id="tplCancelBtn"
+                style="
+                  flex: 0 0 auto;
+                  width: auto;
+                  background: var(--bg-hover);
+                  color: var(--text-secondary);
+                  min-width: 0;
+                "
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Notes -->
+    <div class="tab-panel" id="panel-notes">
+      <div class="notes-panel">
+        <div class="notes-list" id="notesList"></div>
+        <div class="notes-input-bar">
+          <div style="display: flex; gap: 6px">
+            <input
+              class="field-input"
+              type="text"
+              id="noteInput"
+              placeholder="Add a note..."
+              style="margin-bottom: 0; flex: 1"
+            />
+            <button class="note-add-btn" id="noteAddBtn">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Today -->
+    <div class="tab-panel active" id="panel-today">
+      <div class="today-panel">
+        <div class="week-mini" id="weekMini"></div>
+        <div class="week-mini-total" id="weekMiniTotal"></div>
+        <div class="today-header">
+          <div>
+            <div class="today-total" id="todayTotal">--</div>
+            <div class="today-total-label" id="todayTotalLabel">logged today</div>
+          </div>
+          <button class="today-refresh" id="todayRefresh">Refresh</button>
+        </div>
+        <div class="today-list" id="todayList">
+          <div class="today-loading" id="todayLoading">
+            <div class="spinner"></div>
+            <div>Loading timelogs...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button class="footer-link" id="optionsLink">Full Weekly Overview &rarr;</button>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

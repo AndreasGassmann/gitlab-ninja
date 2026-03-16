@@ -1,0 +1,18 @@
+GitLab Ninja supercharges your GitLab boards with productivity features you didn't know you needed.
+
+✅ Auto-Assignment — Automatically assigns newly created board issues to you
+✅ Time Tracking Display — See spent/estimate badges directly on issue cards (color-coded: blue = on track, red = over budget)
+✅ Quick Estimates — One-click estimate buttons (1h, 2h, 4h, 1d) on every card
+✅ Column Summaries — Total time spent vs. estimated at the top of each board column, with over-budget warnings
+✅ Time Estimate Modal — Set estimates without leaving the board
+✅ Board Settings — Per-board configuration panel for toggling features
+✅ Theme Support — Adapts to your GitLab light/dark theme
+
+Works with GitLab.com and self-hosted GitLab instances. All data stays local — no external servers, no analytics, no tracking.
+
+How to get started:
+1. Install the extension
+2. Click the GitLab Ninja icon and enter your GitLab URL and Personal Access Token in Settings
+3. Navigate to any GitLab board — features activate automatically
+
+Open source: https://github.com/AndreasGassmann/gitlab-ninja
