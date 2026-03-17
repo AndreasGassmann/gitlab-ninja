@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitLab Ninja — The Missing Productivity Layer for GitLab Boards</title>
+  <meta name="description" content="Browser extension that transforms GitLab boards into a time-tracking powerhouse. See estimates at a glance, log time in one click, and never lose track of your budget.">
+  <meta property="og:title" content="GitLab Ninja — The Missing Productivity Layer for GitLab Boards">
+  <meta property="og:description" content="Time tracking badges, quick estimates, column summaries, and more — all without leaving the board.">
+  <meta property="og:url" content="https://gitlab-ninja.andycodes.dev">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================
+       Design Tokens (from provided theme)
+       ============================================ */
+    :root {
+      --color-primary: #5dcdf1;
+      --color-primary-hover: #4AC0E8;
+      --color-coral: #fd976d;
+      --color-coral-hover: #FC8555;
+      --color-yellow: #fdd46b;
+      --color-purple: #c9b1fb;
+      --color-green: #79d287;
+      --color-error: #C53030;
+      --color-foreground: #1b1624;
+      --color-foreground-muted: #5c5470;
+      --color-foreground-subtle: #8e8a9a;
+      --color-background: #f9f6f3;
+      --color-surface: #ffffff;
+      --color-border: #e8e3dd;
+      --color-border-light: #f0ebe6;
+      --color-warm-bg: #FEFBF7;
+
+      --font-heading: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-pill: 9999px;
+
+      --shadow-sm: 0 1px 2px rgba(27, 22, 36, 0.04);
+      --shadow-md: 0 4px 12px rgba(27, 22, 36, 0.06);
+      --shadow-lg: 0 8px 24px rgba(27, 22, 36, 0.08);
+      --shadow-hover: 0 12px 32px rgba(27, 22, 36, 0.1);
+      --shadow-xl: 0 20px 60px rgba(27, 22, 36, 0.12);
+
+      --transition: 0.2s ease-in-out;
+
+      /* Brand colors from the logo */
+      --ninja-orange: #FC6D26;
+      --ninja-orange-dark: #E24329;
+      --ninja-orange-light: #FCA326;
+      --ninja-purple: #473B63;
+      --ninja-purple-dark: #2D2540;
+    }
+
+    /* ============================================
+       Reset & Base
+       ============================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: var(--color-background);
+      color: var(--color-foreground);
+      line-height: 1.6;
+      font-size: 16px;
+      overflow-x: hidden;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* ============================================
+       Utilities
+       ============================================ */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .container--narrow {
+      max-width: 900px;
+    }
+
+    .container--wide {
+      max-width: 1400px;
+    }
+
+    /* ============================================
+       Animations
+       ============================================ */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    @keyframes shurikenSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .animate-on-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ============================================
+       Navigation
+       ============================================ */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1rem 0;
+      transition: all 0.3s ease;
+    }
+
+    .nav.scrolled {
+      background: rgba(249, 246, 243, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--color-border-light);
+      padding: 0.75rem 0;
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--color-foreground);
+    }
+
+    .nav-logo svg {
+      width: 36px;
+      height: 36px;
+    }
+
+    .nav-logo span {
+      background: linear-gradient(135deg, var(--ninja-orange-dark), var(--ninja-orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .nav-link {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--color-foreground-muted);
+      transition: color var(--transition);
+    }
+
+    .nav-link:hover {
+      color: var(--color-foreground);
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--ninja-orange);
+      color: white;
+      padding: 0.6rem 1.4rem;
+      border-radius: var(--radius-pill);
+      font-weight: 600;
+      font-size: 0.875rem;
+      font-family: var(--font-body);
+      transition: all var(--transition);
+      box-shadow: 0 2px 8px rgba(252, 109, 38, 0.3);
+    }
+
+    .nav-cta:hover {
+      background: var(--ninja-orange-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(252, 109, 38, 0.4);
+    }
+
+    /* ============================================
+       Hero
+       ============================================ */
+    .hero {
+      padding: 10rem 0 6rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -20%;
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(252, 109, 38, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -15%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(93, 205, 241, 0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      padding: 0.4rem 1.2rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--color-foreground-muted);
+      margin-bottom: 2rem;
+      animation: fadeUp 0.8s ease both;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--color-green);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.3); }
+    }
+
+    .hero h1 {
+      font-family: var(--font-heading);
+      font-size: clamp(3rem, 7vw, 5rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: var(--color-foreground);
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.8s ease 0.1s both;
+    }
+
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, var(--ninja-orange-dark) 0%, var(--ninja-orange) 50%, var(--ninja-orange-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.1rem, 2vw, 1.3rem);
+      color: var(--color-foreground-muted);
+      max-width: 600px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.7;
+      animation: fadeUp 0.8s ease 0.2s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      animation: fadeUp 0.8s ease 0.3s both;
+      flex-wrap: wrap;
+    }
+
+    .btn-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--ninja-orange);
+      color: white;
+      padding: 0.9rem 2rem;
+      border-radius: var(--radius-pill);
+      font-weight: 700;
+      font-size: 1rem;
+      font-family: var(--font-body);
+      transition: all var(--transition);
+      box-shadow: 0 4px 16px rgba(252, 109, 38, 0.3);
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-install:hover {
+      background: var(--ninja-orange-dark);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(252, 109, 38, 0.4);
+    }
+
+    .btn-install svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--color-surface);
+      color: var(--color-foreground);
+      padding: 0.9rem 2rem;
+      border-radius: var(--radius-pill);
+      font-weight: 600;
+      font-size: 1rem;
+      font-family: var(--font-body);
+      transition: all var(--transition);
+      border: 1.5px solid var(--color-border);
+    }
+
+    .btn-github:hover {
+      border-color: var(--color-foreground-subtle);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-github svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .hero-privacy {
+      font-size: 0.8rem;
+      color: var(--color-foreground-subtle);
+      animation: fadeUp 0.8s ease 0.4s both;
+    }
+
+    .hero-privacy svg {
+      display: inline-block;
+      vertical-align: -2px;
+      margin-right: 0.3rem;
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Hero Screenshot */
+    .hero-screenshot {
+      margin-top: 4rem;
+      position: relative;
+      animation: fadeUp 1s ease 0.5s both;
+    }
+
+    .hero-screenshot-inner {
+      position: relative;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0,0,0,0.04);
+    }
+
+    .hero-screenshot-inner img {
+      width: 100%;
+      display: block;
+    }
+
+    .hero-screenshot-glow {
+      position: absolute;
+      bottom: -60px;
+      left: 10%;
+      right: 10%;
+      height: 120px;
+      background: radial-gradient(ellipse, rgba(252, 109, 38, 0.12) 0%, transparent 70%);
+      filter: blur(40px);
+      pointer-events: none;
+    }
+
+    /* ============================================
+       Section Shared
+       ============================================ */
+    .section {
+      padding: 7rem 0;
+    }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-heading);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--ninja-orange);
+      margin-bottom: 1rem;
+    }
+
+    .section-label::before {
+      content: '';
+      width: 20px;
+      height: 2px;
+      background: var(--ninja-orange);
+      border-radius: 1px;
+    }
+
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--color-foreground);
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      font-size: 1.1rem;
+      color: var(--color-foreground-muted);
+      max-width: 550px;
+      line-height: 1.7;
+    }
+
+    /* ============================================
+       Feature Showcase (Alternating)
+       ============================================ */
+    .showcase {
+      padding: 4rem 0;
+    }
+
+    .showcase-item {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      padding: 5rem 0;
+    }
+
+    .showcase-item:nth-child(even) .showcase-visual {
+      order: -1;
+    }
+
+    .showcase-text {
+      max-width: 480px;
+    }
+
+    .showcase-text .feature-number {
+      font-family: var(--font-heading);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--ninja-orange);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .showcase-text .feature-number::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--color-border);
+      max-width: 60px;
+    }
+
+    .showcase-text h3 {
+      font-family: var(--font-heading);
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .showcase-text p {
+      color: var(--color-foreground-muted);
+      font-size: 1.05rem;
+      line-height: 1.7;
+    }
+
+    .showcase-visual {
+      position: relative;
+    }
+
+    .showcase-visual img {
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.03);
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .showcase-visual:hover img {
+      transform: translateY(-4px) scale(1.01);
+      box-shadow: var(--shadow-xl);
+    }
+
+    /* Popup screenshots — side by side, smaller */
+    .showcase-popup-pair {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+
+    .showcase-popup-pair img {
+      width: calc(50% - 0.75rem);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.03);
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .showcase-popup-pair img:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: var(--shadow-xl);
+    }
+
+    /* ============================================
+       Feature Grid (smaller features)
+       ============================================ */
+    .features-grid {
+      padding: 5rem 0 7rem;
+    }
+
+    .features-grid-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .features-grid-header .section-subtitle {
+      margin: 0 auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    .feature-card {
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      overflow: hidden;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .feature-card:hover {
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-6px);
+      border-color: var(--color-border-light);
+    }
+
+    .feature-card-img {
+      overflow: hidden;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .feature-card-img img {
+      width: 100%;
+      transition: transform 0.5s ease;
+    }
+
+    .feature-card:hover .feature-card-img img {
+      transform: scale(1.03);
+    }
+
+    .feature-card-body {
+      padding: 1.5rem;
+    }
+
+    .feature-card-body h4 {
+      font-family: var(--font-heading);
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-card-body p {
+      color: var(--color-foreground-muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* ============================================
+       Privacy Section
+       ============================================ */
+    .privacy-section {
+      padding: 6rem 0;
+      position: relative;
+    }
+
+    .privacy-card {
+      background: var(--ninja-purple-dark);
+      border-radius: 24px;
+      padding: 4rem;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .privacy-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(252, 109, 38, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .privacy-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40%;
+      left: -10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(93, 205, 241, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .privacy-inner {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .privacy-text h2 {
+      font-family: var(--font-heading);
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .privacy-text p {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 1.1rem;
+      line-height: 1.7;
+    }
+
+    .privacy-features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .privacy-feature {
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .privacy-feature:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .privacy-feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: rgba(252, 109, 38, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.75rem;
+      font-size: 1.2rem;
+    }
+
+    .privacy-feature h4 {
+      font-family: var(--font-heading);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .privacy-feature p {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    /* ============================================
+       Compatibility
+       ============================================ */
+    .compat-section {
+      padding: 5rem 0;
+      text-align: center;
+    }
+
+    .compat-grid {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .compat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1.5rem 2.5rem;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s ease;
+      min-width: 140px;
+    }
+
+    .compat-item:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .compat-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .compat-icon svg {
+      width: 40px;
+      height: 40px;
+    }
+
+    .compat-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--color-foreground);
+    }
+
+    .compat-check {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--color-green);
+    }
+
+    /* ============================================
+       Final CTA
+       ============================================ */
+    .cta-section {
+      padding: 7rem 0;
+      text-align: center;
+      position: relative;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+    }
+
+    .cta-logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 2rem;
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .cta-section h2 {
+      font-family: var(--font-heading);
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .cta-section p {
+      color: var(--color-foreground-muted);
+      font-size: 1.1rem;
+      margin-bottom: 2.5rem;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.7;
+    }
+
+    .cta-actions {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* ============================================
+       Footer
+       ============================================ */
+    .footer {
+      padding: 3rem 0;
+      border-top: 1px solid var(--color-border-light);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--color-foreground-muted);
+    }
+
+    .footer-logo svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .footer-links a {
+      font-size: 0.875rem;
+      color: var(--color-foreground-subtle);
+      transition: color var(--transition);
+    }
+
+    .footer-links a:hover {
+      color: var(--color-foreground);
+    }
+
+    .footer-copy {
+      font-size: 0.8rem;
+      color: var(--color-foreground-subtle);
+    }
+
+    /* ============================================
+       Responsive
+       ============================================ */
+    @media (max-width: 1024px) {
+      .showcase-item {
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+      }
+
+      .showcase-item:nth-child(even) .showcase-visual {
+        order: 0;
+      }
+
+      .showcase-text {
+        max-width: 100%;
+      }
+
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .privacy-inner {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hero {
+        padding: 8rem 0 4rem;
+      }
+
+      .hero h1 {
+        font-size: 2.8rem;
+      }
+
+      .nav-links .nav-link {
+        display: none;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .privacy-card {
+        padding: 2.5rem 2rem;
+      }
+
+      .privacy-features {
+        grid-template-columns: 1fr;
+      }
+
+      .showcase-popup-pair {
+        flex-direction: column;
+      }
+
+      .showcase-popup-pair img {
+        width: 80%;
+        margin: 0 auto;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        gap: 1.5rem;
+        text-align: center;
+      }
+
+      .compat-grid {
+        gap: 1rem;
+      }
+
+      .compat-item {
+        padding: 1.2rem 1.5rem;
+        min-width: 120px;
+      }
+
+      .section {
+        padding: 5rem 0;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 {
+        font-size: 2.2rem;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+      }
+
+      .btn-install, .btn-github {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    /* ============================================
+       Decorative: Geometric Shuriken Pattern
+       ============================================ */
+    .geo-accent {
+      position: absolute;
+      pointer-events: none;
+      opacity: 0.04;
+    }
+
+    .geo-accent svg {
+      animation: shurikenSpin 30s linear infinite;
+    }
+
+    .geo-accent--1 {
+      top: 15%;
+      right: 5%;
+    }
+
+    .geo-accent--2 {
+      bottom: 25%;
+      left: 3%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="container nav-inner">
+      <a href="#" class="nav-logo">
+        <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="64,64 32,64 4,4" fill="#C32E16"/>
+          <polygon points="64,64 4,4 64,32" fill="#E24329"/>
+          <polygon points="64,64 64,32 124,4" fill="#FC6D26"/>
+          <polygon points="64,64 124,4 96,64" fill="#E24329"/>
+          <polygon points="64,64 96,64 124,124" fill="#FC6D26"/>
+          <polygon points="64,64 124,124 64,96" fill="#FCA326"/>
+          <polygon points="64,64 64,96 4,124" fill="#FC6D26"/>
+          <polygon points="64,64 4,124 32,64" fill="#E24329"/>
+          <polygon points="64,64 48,48 64,22" fill="#473B63"/>
+          <polygon points="64,64 64,22 80,48" fill="#2D2540"/>
+          <polygon points="64,64 80,48 106,64" fill="#473B63"/>
+          <polygon points="64,64 106,64 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,80 64,106" fill="#473B63"/>
+          <polygon points="64,64 64,106 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,48 22,64" fill="#473B63"/>
+          <polygon points="64,64 22,64 48,80" fill="#2D2540"/>
+          <circle cx="64" cy="64" r="14" fill="#FFFFFF"/>
+          <circle cx="64" cy="64" r="6" fill="#E24329"/>
+        </svg>
+        GitLab <span>Ninja</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#privacy" class="nav-link">Privacy</a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="nav-link" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="nav-cta" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero-content">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        Open source &middot; MIT License
+      </div>
+      <h1>
+        The missing<br>
+        <span class="gradient-text">productivity layer</span><br>
+        for GitLab
+      </h1>
+      <p class="hero-subtitle">
+        Time tracking badges, quick estimates, column summaries, and a full dashboard &mdash; all without leaving your GitLab board.
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="btn-install" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install Extension
+        </a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="btn-github" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <p class="hero-privacy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Zero data collection. Your data never leaves your browser.
+      </p>
+    </div>
+    <div class="container container--wide hero-screenshot">
+      <div class="hero-screenshot-inner">
+        <img src="../store/screenshots/raw/gitlab-new-board-view-with-additional-information.png"
+             alt="GitLab Ninja enhanced board view with time tracking badges, column summaries, and today indicator"
+             loading="eager">
+      </div>
+      <div class="hero-screenshot-glow"></div>
+    </div>
+
+    <!-- Decorative geometry -->
+    <div class="geo-accent geo-accent--1">
+      <svg width="120" height="120" viewBox="0 0 128 128"><polygon points="64,64 32,64 4,4" fill="#E24329"/><polygon points="64,64 4,4 64,32" fill="#FC6D26"/><polygon points="64,64 64,32 124,4" fill="#E24329"/><polygon points="64,64 124,4 96,64" fill="#FC6D26"/><polygon points="64,64 96,64 124,124" fill="#E24329"/><polygon points="64,64 124,124 64,96" fill="#FC6D26"/><polygon points="64,64 64,96 4,124" fill="#E24329"/><polygon points="64,64 4,124 32,64" fill="#FC6D26"/></svg>
+    </div>
+    <div class="geo-accent geo-accent--2">
+      <svg width="80" height="80" viewBox="0 0 128 128"><polygon points="64,64 32,64 4,4" fill="#473B63"/><polygon points="64,64 4,4 64,32" fill="#2D2540"/><polygon points="64,64 64,32 124,4" fill="#473B63"/><polygon points="64,64 124,4 96,64" fill="#2D2540"/><polygon points="64,64 96,64 124,124" fill="#473B63"/><polygon points="64,64 124,124 64,96" fill="#2D2540"/><polygon points="64,64 64,96 4,124" fill="#473B63"/><polygon points="64,64 4,124 32,64" fill="#2D2540"/></svg>
+    </div>
+  </section>
+
+  <!-- Feature Showcase -->
+  <section class="showcase section" id="features">
+    <div class="container">
+
+      <!-- 1: Quick Time Logging -->
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-text">
+          <div class="feature-number">01 &mdash; Board Enhancement</div>
+          <h3>Log time without<br>leaving the board</h3>
+          <p>Expand any card to log time with one-click duration buttons. Pick the date, add a note, and submit &mdash; all inline, no page navigation required.</p>
+        </div>
+        <div class="showcase-visual">
+          <img src="../store/screenshots/raw/gitlab-new-board-view-with-additional-information-timelog-in-card.png"
+               alt="Log time directly from a board card"
+               loading="lazy">
+        </div>
+      </div>
+
+      <!-- 2: Quick Issue Creation -->
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-text">
+          <div class="feature-number">02 &mdash; Board Enhancement</div>
+          <h3>Create issues directly<br>from the board</h3>
+          <p>New issues get auto-assigned to you with one-click estimate buttons &mdash; 15m to 1d. Choose the project, set a time budget, and keep moving.</p>
+        </div>
+        <div class="showcase-visual">
+          <img src="../store/screenshots/raw/gitlab-new-board-view-with-additional-information-create-new-issue.png"
+               alt="Create issues with auto-assignment and estimates"
+               loading="lazy">
+        </div>
+      </div>
+
+      <!-- 3: Today Dashboard -->
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-text">
+          <div class="feature-number">03 &mdash; Dashboard</div>
+          <h3>See your day<br>at a glance</h3>
+          <p>The popup shows today's logged time, weekly bar chart, and every issue you touched &mdash; with progress rings and time notes. Adapts to your GitLab theme.</p>
+        </div>
+        <div class="showcase-visual">
+          <div class="showcase-popup-pair">
+            <img src="../store/screenshots/raw/gitlab-ninja-extension-today-view.png"
+                 alt="Today dashboard — light theme"
+                 loading="lazy">
+            <img src="../store/screenshots/raw/gitlab-ninja-extension-today-view-dark.png"
+                 alt="Today dashboard — dark theme"
+                 loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <!-- 4: Weekly Overview -->
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-text">
+          <div class="feature-number">04 &mdash; Dashboard</div>
+          <h3>Track hours across<br>all your projects</h3>
+          <p>A full weekly timeline shows every time entry across every project, color-coded and organized. See daily totals, weekly totals, and spot gaps instantly.</p>
+        </div>
+        <div class="showcase-visual">
+          <img src="../store/screenshots/raw/gitlab-ninja-extension-weekly-view.png"
+               alt="Weekly time tracking overview"
+               loading="lazy">
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Feature Grid (smaller features) -->
+  <section class="features-grid">
+    <div class="container">
+      <div class="features-grid-header animate-on-scroll">
+        <div class="section-label">And more</div>
+        <h2 class="section-title">Every detail, considered</h2>
+        <p class="section-subtitle">From monthly overviews to smart reminders, GitLab Ninja covers the full time tracking workflow.</p>
+      </div>
+      <div class="grid">
+        <div class="feature-card animate-on-scroll">
+          <div class="feature-card-img">
+            <img src="../store/screenshots/raw/gitlab-ninja-extension-calendar-view.png"
+                 alt="Monthly calendar view"
+                 loading="lazy">
+          </div>
+          <div class="feature-card-body">
+            <h4>Calendar View</h4>
+            <p>Monthly bird's-eye view of logged time. See daily totals, spot patterns, and track your consistency with color-coded project dots.</p>
+          </div>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <div class="feature-card-img">
+            <img src="../store/screenshots/raw/gitlab-ninja-extension-color-picker.png"
+                 alt="Project color picker"
+                 loading="lazy">
+          </div>
+          <div class="feature-card-body">
+            <h4>Project Colors</h4>
+            <p>Assign colors to projects with curated palettes. Instantly tell which project owns which time entry across every view.</p>
+          </div>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <div class="feature-card-img">
+            <img src="../store/screenshots/raw/gitlab-ninja-extension-notifications.png"
+                 alt="Notification settings"
+                 loading="lazy">
+          </div>
+          <div class="feature-card-body">
+            <h4>Smart Notifications</h4>
+            <p>Start-of-day and end-of-day reminders so you never forget to log your hours. Fires only on weekdays.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacy -->
+  <section class="privacy-section" id="privacy">
+    <div class="container">
+      <div class="privacy-card animate-on-scroll">
+        <div class="privacy-inner">
+          <div class="privacy-text">
+            <div class="section-label" style="color: var(--ninja-orange-light);">Privacy First</div>
+            <h2>Your data stays<br>in your browser</h2>
+            <p>GitLab Ninja collects zero data. No analytics, no telemetry, no external servers. API requests go only to your own GitLab instance.</p>
+          </div>
+          <div class="privacy-features">
+            <div class="privacy-feature">
+              <div class="privacy-feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <h4>Local Storage Only</h4>
+              <p>Token and settings stored in your browser</p>
+            </div>
+            <div class="privacy-feature">
+              <div class="privacy-feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </div>
+              <h4>Direct API Calls</h4>
+              <p>Requests go straight to your GitLab instance</p>
+            </div>
+            <div class="privacy-feature">
+              <div class="privacy-feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <h4>Fully Open Source</h4>
+              <p>Inspect every line of code on GitHub</p>
+            </div>
+            <div class="privacy-feature">
+              <div class="privacy-feature-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              </div>
+              <h4>Zero Telemetry</h4>
+              <p>No analytics, no tracking, no phone-home</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Browser Compatibility -->
+  <section class="compat-section">
+    <div class="container">
+      <div class="section-label" style="justify-content: center;">Compatibility</div>
+      <h2 class="section-title" style="text-align: center;">Works everywhere you do</h2>
+      <p class="section-subtitle" style="text-align: center; margin: 0.5rem auto 0;">GitLab.com and self-hosted instances. All major browsers.</p>
+      <div class="compat-grid">
+        <div class="compat-item animate-on-scroll">
+          <div class="compat-icon">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#4285F4"/><path d="M24 4C12.95 4 4 12.95 4 24h20V4z" fill="#EA4335"/><path d="M4 24c0 11.05 8.95 20 20 20V24H4z" fill="#34A853"/><path d="M24 44c11.05 0 20-8.95 20-20H24v20z" fill="#FBBC05"/><circle cx="24" cy="24" r="8" fill="white"/></svg>
+          </div>
+          <span class="compat-name">Chrome</span>
+          <span class="compat-check">Supported</span>
+        </div>
+        <div class="compat-item animate-on-scroll">
+          <div class="compat-icon">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#FF7139"/><path d="M24 8c-8.84 0-16 7.16-16 16s7.16 16 16 16c.67 0 1.2-.1 1.8-.18C22.42 37.5 20 33.08 20 28c0-6.63 5.37-12 12-12 2.2 0 4.26.6 6.03 1.64C36.2 12.05 30.56 8 24 8z" fill="white"/></svg>
+          </div>
+          <span class="compat-name">Firefox</span>
+          <span class="compat-check">Supported</span>
+        </div>
+        <div class="compat-item animate-on-scroll">
+          <div class="compat-icon">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#0078D7"/><path d="M12 14h24v20H12z" fill="white" opacity="0.9"/><path d="M14 16h20v16H14z" fill="#0078D7"/><text x="24" y="28" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">e</text></svg>
+          </div>
+          <span class="compat-name">Edge</span>
+          <span class="compat-check">Supported</span>
+        </div>
+        <div class="compat-item animate-on-scroll">
+          <div class="compat-icon">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#006CFF"/><path d="M18 14l14 10-14 10V14z" fill="white"/></svg>
+          </div>
+          <span class="compat-name">Brave</span>
+          <span class="compat-check">Supported</span>
+        </div>
+        <div class="compat-item animate-on-scroll">
+          <div class="compat-icon">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#007AFF"/><circle cx="24" cy="24" r="10" fill="none" stroke="white" stroke-width="3"/><circle cx="24" cy="14" r="3" fill="white"/></svg>
+          </div>
+          <span class="compat-name">Safari</span>
+          <span class="compat-check">Supported</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-logo animate-on-scroll">
+        <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+          <polygon points="64,64 32,64 4,4" fill="#C32E16"/>
+          <polygon points="64,64 4,4 64,32" fill="#E24329"/>
+          <polygon points="64,64 64,32 124,4" fill="#FC6D26"/>
+          <polygon points="64,64 124,4 96,64" fill="#E24329"/>
+          <polygon points="64,64 96,64 124,124" fill="#FC6D26"/>
+          <polygon points="64,64 124,124 64,96" fill="#FCA326"/>
+          <polygon points="64,64 64,96 4,124" fill="#FC6D26"/>
+          <polygon points="64,64 4,124 32,64" fill="#E24329"/>
+          <polygon points="64,64 48,48 64,22" fill="#473B63"/>
+          <polygon points="64,64 64,22 80,48" fill="#2D2540"/>
+          <polygon points="64,64 80,48 106,64" fill="#473B63"/>
+          <polygon points="64,64 106,64 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,80 64,106" fill="#473B63"/>
+          <polygon points="64,64 64,106 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,48 22,64" fill="#473B63"/>
+          <polygon points="64,64 22,64 48,80" fill="#2D2540"/>
+          <circle cx="64" cy="64" r="14" fill="#FFFFFF"/>
+          <circle cx="64" cy="64" r="6" fill="#E24329"/>
+        </svg>
+      </div>
+      <h2 class="animate-on-scroll">Ready to level up<br>your GitLab boards?</h2>
+      <p class="animate-on-scroll">Install GitLab Ninja and start tracking time like a pro. Free, open source, and privacy-first.</p>
+      <div class="cta-actions animate-on-scroll">
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="btn-install" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install Extension
+        </a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" class="btn-github" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          View Source
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-logo">
+        <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="64,64 32,64 4,4" fill="#C32E16"/>
+          <polygon points="64,64 4,4 64,32" fill="#E24329"/>
+          <polygon points="64,64 64,32 124,4" fill="#FC6D26"/>
+          <polygon points="64,64 124,4 96,64" fill="#E24329"/>
+          <polygon points="64,64 96,64 124,124" fill="#FC6D26"/>
+          <polygon points="64,64 124,124 64,96" fill="#FCA326"/>
+          <polygon points="64,64 64,96 4,124" fill="#FC6D26"/>
+          <polygon points="64,64 4,124 32,64" fill="#E24329"/>
+          <polygon points="64,64 48,48 64,22" fill="#473B63"/>
+          <polygon points="64,64 64,22 80,48" fill="#2D2540"/>
+          <polygon points="64,64 80,48 106,64" fill="#473B63"/>
+          <polygon points="64,64 106,64 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,80 64,106" fill="#473B63"/>
+          <polygon points="64,64 64,106 80,80" fill="#2D2540"/>
+          <polygon points="64,64 48,48 22,64" fill="#473B63"/>
+          <polygon points="64,64 22,64 48,80" fill="#2D2540"/>
+          <circle cx="64" cy="64" r="14" fill="#FFFFFF"/>
+          <circle cx="64" cy="64" r="6" fill="#E24329"/>
+        </svg>
+        GitLab Ninja
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+        <a href="https://github.com/AndreasGassmann/gitlab-ninja/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+      <span class="footer-copy">Built by <a href="https://andycodes.dev" target="_blank" rel="noopener" style="color: var(--ninja-orange); font-weight: 600;">andycodes</a></span>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-triggered animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+    document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    let lastScroll = 0;
+    window.addEventListener('scroll', () => {
+      const scrollY = window.scrollY;
+      nav.classList.toggle('scrolled', scrollY > 40);
+      lastScroll = scrollY;
+    }, { passive: true });
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.querySelector(anchor.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
