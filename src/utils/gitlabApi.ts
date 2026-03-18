@@ -133,6 +133,57 @@ export async function addTimeSpent(
 }
 
 /**
+ * Timelog entry returned by GitLab GraphQL
+ */
+export interface Timelog {
+  timeSpent: number; // seconds
+  spentAt: string;
+  summary: string | null;
+  user: { name: string } | null;
+}
+
+/**
+ * Fetch all timelogs for an issue via GraphQL.
+ */
+export async function fetchTimelogs(
+  projectPath: string,
+  issueIid: string
+): Promise<Timelog[]> {
+  const csrfToken = getCsrfToken();
+  const query = `query {
+    project(fullPath: "${projectPath}") {
+      issue(iid: "${issueIid}") {
+        timelogs {
+          nodes {
+            timeSpent
+            spentAt
+            summary
+            user { name }
+          }
+        }
+      }
+    }
+  }`;
+
+  const response = await fetch('/api/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    debugError(`GitLab Ninja: Failed to fetch timelogs: ${response.status}`);
+    return [];
+  }
+
+  const data = await response.json();
+  return data?.data?.project?.issue?.timelogs?.nodes ?? [];
+}
+
+/**
  * Format a Date to YYYY-MM-DD
  */
 export function formatDate(date: Date): string {

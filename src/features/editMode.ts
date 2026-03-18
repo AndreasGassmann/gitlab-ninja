@@ -15,7 +15,7 @@ import {
   getCachedTimeTracking,
   cacheTimeTracking,
 } from '../utils/api';
-import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate } from '../utils/gitlabApi';
+import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate, fetchTimelogs, Timelog } from '../utils/gitlabApi';
 import { formatHours } from '../utils/time';
 import { ESTIMATE_PRESETS } from '../utils/constants';
 
@@ -238,6 +238,9 @@ export class EditModeFeature {
       <div class="gn-edit-row gn-edit-info">
         <span class="gn-spent-info">${spentStr} / ${estStr}</span>
       </div>
+      <div class="gn-timelogs" data-loading="true">
+        <span class="gn-timelogs-loading">Loading timelogs…</span>
+      </div>
       <div class="gn-edit-row">
         <span class="gn-edit-label">Log:</span>
         <div class="gn-preset-group">${spentBtns}</div>
@@ -350,6 +353,60 @@ export class EditModeFeature {
         submitBtn.disabled = false;
       }
     });
+
+    // Fetch and render timelogs
+    this.loadTimelogs(controls, card, iid);
+  }
+
+  private async loadTimelogs(
+    controls: HTMLElement,
+    card: HTMLElement,
+    iid: string
+  ): Promise<void> {
+    const container = controls.querySelector<HTMLElement>('.gn-timelogs');
+    if (!container) return;
+
+    const projectPath = extractProjectPath(card);
+    if (!projectPath) {
+      container.remove();
+      return;
+    }
+
+    const timelogs = await fetchTimelogs(projectPath, extractIidFromCacheKey(iid));
+    // Check controls are still in the DOM (user may have closed edit mode)
+    if (!controls.isConnected) return;
+
+    if (timelogs.length === 0) {
+      container.innerHTML = '<span class="gn-timelogs-empty">No timelogs</span>';
+      return;
+    }
+
+    // Sort by spentAt descending (most recent first)
+    timelogs.sort((a, b) => new Date(b.spentAt).getTime() - new Date(a.spentAt).getTime());
+
+    const rows = timelogs.map((t) => this.renderTimelogRow(t)).join('');
+    container.innerHTML = `<div class="gn-timelogs-list">${rows}</div>`;
+    container.removeAttribute('data-loading');
+  }
+
+  private renderTimelogRow(t: Timelog): string {
+    const date = new Date(t.spentAt);
+    const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const hours = t.timeSpent / 3600;
+    const duration = formatHours(hours);
+    const user = t.user?.name ?? '';
+    const summary = t.summary ? this.escapeHtml(t.summary) : '';
+
+    return `<div class="gn-timelog-row">
+      <span class="gn-timelog-date">${dateStr}</span>
+      <span class="gn-timelog-duration">${duration}</span>
+      <span class="gn-timelog-user">${this.escapeHtml(user)}</span>
+      ${summary ? `<span class="gn-timelog-summary">${summary}</span>` : ''}
+    </div>`;
+  }
+
+  private escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   // ── Helpers ────────────────────────────────────────────────────────

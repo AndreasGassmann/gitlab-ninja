@@ -41,6 +41,7 @@ interface IssueTemplate {
   estimate: string;
   timeSpent: string;
   summary: string;
+  spentAtTime?: string; // "HH:MM" for specific time today, empty = current time
 }
 
 function applyPopupTheme(mode: ThemeMode) {
@@ -273,6 +274,7 @@ function clearProject() {
   $('projectClear').style.display = 'none';
   updateSubmitButton();
 }
+
 
 async function fetchProjects(): Promise<GitLabProject[]> {
   if (!tabInfo || !apiToken) return [];
@@ -949,6 +951,7 @@ function showTemplateForm(tpl?: IssueTemplate) {
     ($('tplEstimate') as HTMLInputElement).value = tpl.estimate;
     ($('tplSpent') as HTMLInputElement).value = tpl.timeSpent;
     ($('tplSummary') as HTMLInputElement).value = tpl.summary;
+    ($('tplSpentAtTime') as HTMLInputElement).value = tpl.spentAtTime || '';
   } else {
     title.textContent = 'New Template';
     editId.value = '';
@@ -968,6 +971,7 @@ function showTemplateForm(tpl?: IssueTemplate) {
     ($('tplEstimate') as HTMLInputElement).value = '';
     ($('tplSpent') as HTMLInputElement).value = '';
     ($('tplSummary') as HTMLInputElement).value = '';
+    ($('tplSpentAtTime') as HTMLInputElement).value = '';
   }
 
   form.style.display = '';
@@ -996,6 +1000,7 @@ async function saveTemplate() {
     estimate: ($('tplEstimate') as HTMLInputElement).value.trim(),
     timeSpent: ($('tplSpent') as HTMLInputElement).value.trim(),
     summary: ($('tplSummary') as HTMLInputElement).value.trim(),
+    spentAtTime: ($('tplSpentAtTime') as HTMLInputElement).value.trim() || undefined,
   };
 
   if (editId) {
@@ -1104,6 +1109,12 @@ async function executeTemplateCreation(
     if (tpl.timeSpent) {
       const spentBody: Record<string, string> = { duration: tpl.timeSpent };
       if (tpl.summary) spentBody.summary = tpl.summary;
+      if (tpl.spentAtTime) {
+        const now = new Date();
+        const [hours, minutes] = tpl.spentAtTime.split(':').map(Number);
+        const spentAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+        spentBody.spent_at = spentAt.toISOString();
+      }
       await fetch(`${baseUrl}/projects/${encodedProject}/issues/${issue.iid}/add_spent_time`, {
         method: 'POST',
         headers,

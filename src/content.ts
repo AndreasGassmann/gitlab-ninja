@@ -14,6 +14,7 @@ import { TimeEstimateModalFeature } from './features/timeEstimateModal';
 import { BoardSettingsFeature } from './features/boardSettings';
 import { EditModeFeature } from './features/editMode';
 import { NewIssueEstimateFeature } from './features/newIssueEstimate';
+import { BoardRecentProjectsFeature } from './features/boardRecentProjects';
 import {
   loadCustomColors,
   applyColorOverrides,
@@ -140,6 +141,7 @@ class GitLabNinja {
   private boardSettingsFeature: BoardSettingsFeature;
   private editModeFeature: EditModeFeature;
   private newIssueEstimateFeature: NewIssueEstimateFeature;
+  private boardRecentProjectsFeature: BoardRecentProjectsFeature;
   private mainObserver: MutationObserver | null = null;
   private refreshInterval: number | null = null;
 
@@ -151,6 +153,7 @@ class GitLabNinja {
     this.editModeFeature = new EditModeFeature();
     this.editModeFeature.setOnRefresh(() => this.enhanceAllFeatures());
     this.newIssueEstimateFeature = new NewIssueEstimateFeature(eventNonce);
+    this.boardRecentProjectsFeature = new BoardRecentProjectsFeature(eventNonce);
     this.boardSettingsFeature = new BoardSettingsFeature((settings) => {
       // Toggle auto-assign
       if (this.autoAssignFeature) {
@@ -185,6 +188,9 @@ class GitLabNinja {
 
     // Initialize new issue estimate feature
     this.newIssueEstimateFeature.init();
+
+    // Initialize board recent projects feature
+    this.boardRecentProjectsFeature.init();
 
     // Initial enhancement pass
     this.enhanceAllFeatures();

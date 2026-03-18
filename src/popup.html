@@ -1564,13 +1564,26 @@
               </div>
             </div>
 
-            <label class="field-label" for="tplSummary">Work Log Summary</label>
-            <input
-              class="field-input"
-              type="text"
-              id="tplSummary"
-              placeholder="e.g. Daily standup meeting"
-            />
+            <div style="display: flex; gap: 12px">
+              <div style="flex: 1">
+                <label class="field-label" for="tplSummary">Work Log Summary</label>
+                <input
+                  class="field-input"
+                  type="text"
+                  id="tplSummary"
+                  placeholder="e.g. Daily standup meeting"
+                />
+              </div>
+              <div style="flex: 0 0 auto">
+                <label class="field-label" for="tplSpentAtTime">Log time at</label>
+                <input
+                  class="field-input"
+                  type="time"
+                  id="tplSpentAtTime"
+                  title="Leave empty to use current time when created"
+                />
+              </div>
+            </div>
 
             <div style="display: flex; gap: 8px; margin-top: 2px">
               <button class="submit-btn" id="tplSaveBtn" style="flex: 1">Save Template</button>

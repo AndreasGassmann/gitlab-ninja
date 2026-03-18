@@ -459,6 +459,45 @@ li.board-card.gn-effort-xl {
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
 }
 
+/* ── Board Recent Project Buttons ──────────────────────────────── */
+.gn-recent-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px 2px;
+}
+
+.gn-recent-project-btn {
+  padding: 2px 8px;
+  background: var(--gn-grey-50);
+  border: 1px solid var(--gn-grey-300);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gn-grey-600);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: var(--gn-font);
+  line-height: 1.5;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gn-recent-project-btn:hover {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: #818cf8;
+  color: #6366f1;
+}
+
+.gn-recent-project-btn.gn-active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+}
+
 /* ── Modal Quick Estimate / Date Buttons ──────────────────────── */
 .gitlab-ninja-quick-estimates > div,
 .gitlab-ninja-date-shortcuts > div {
@@ -693,6 +732,66 @@ div.board-card.gn-has-edit-controls {
   padding: 0;
 }
 
+/* ── Timelogs List ──────────────────────────────────────────────── */
+.gn-timelogs {
+  margin-bottom: 6px;
+}
+
+.gn-timelogs-loading,
+.gn-timelogs-empty {
+  font-size: 10px;
+  color: var(--gn-grey-400);
+  font-family: var(--gn-font);
+  font-style: italic;
+}
+
+.gn-timelogs-list {
+  max-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gn-timelog-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-family: var(--gn-font);
+  color: var(--gn-grey-600);
+  line-height: 1.6;
+}
+
+.gn-timelog-date {
+  font-family: var(--gn-font-mono);
+  font-weight: 600;
+  color: var(--gn-grey-500);
+  min-width: 30px;
+  flex-shrink: 0;
+}
+
+.gn-timelog-duration {
+  font-family: var(--gn-font-mono);
+  font-weight: 700;
+  color: var(--gn-grey-700);
+  min-width: 24px;
+  flex-shrink: 0;
+}
+
+.gn-timelog-user {
+  color: var(--gn-grey-500);
+  flex-shrink: 0;
+}
+
+.gn-timelog-summary {
+  color: var(--gn-grey-400);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .gn-summary-input {
   flex: 1;
   min-width: 0;
@@ -897,6 +996,25 @@ div.board-card.gn-has-edit-controls {
   .gn-spent-info {
     color: #c5c5da;
   }
+  .gn-timelogs-loading,
+  .gn-timelogs-empty {
+    color: #6b6b8a;
+  }
+  .gn-timelog-row {
+    color: #a5a5be;
+  }
+  .gn-timelog-date {
+    color: #8b8ba6;
+  }
+  .gn-timelog-duration {
+    color: #c5c5da;
+  }
+  .gn-timelog-user {
+    color: #8b8ba6;
+  }
+  .gn-timelog-summary {
+    color: #6b6b8a;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -976,6 +1094,25 @@ div.board-card.gn-has-edit-controls {
 }
 .gl-dark .gn-spent-info {
   color: #c5c5da;
+}
+.gl-dark .gn-timelogs-loading,
+.gl-dark .gn-timelogs-empty {
+  color: #6b6b8a;
+}
+.gl-dark .gn-timelog-row {
+  color: #a5a5be;
+}
+.gl-dark .gn-timelog-date {
+  color: #8b8ba6;
+}
+.gl-dark .gn-timelog-duration {
+  color: #c5c5da;
+}
+.gl-dark .gn-timelog-user {
+  color: #8b8ba6;
+}
+.gl-dark .gn-timelog-summary {
+  color: #6b6b8a;
 }
 
 .gl-dark .gn-preset-btn,
@@ -1137,6 +1274,25 @@ div.board-card.gn-has-edit-controls {
 }
 .gn-force-dark .gn-spent-info {
   color: #c5c5da;
+}
+.gn-force-dark .gn-timelogs-loading,
+.gn-force-dark .gn-timelogs-empty {
+  color: #6b6b8a;
+}
+.gn-force-dark .gn-timelog-row {
+  color: #a5a5be;
+}
+.gn-force-dark .gn-timelog-date {
+  color: #8b8ba6;
+}
+.gn-force-dark .gn-timelog-duration {
+  color: #c5c5da;
+}
+.gn-force-dark .gn-timelog-user {
+  color: #8b8ba6;
+}
+.gn-force-dark .gn-timelog-summary {
+  color: #6b6b8a;
 }
 
 .gn-force-dark .gn-preset-btn,
