@@ -263,25 +263,44 @@ export class TimeEstimateModalFeature {
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'gitlab-ninja-date-shortcuts';
 
+    const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+    function workdayOffset(from: Date, workdays: number): Date {
+      const d = new Date(from);
+      let remaining = Math.abs(workdays);
+      const dir = workdays < 0 ? -1 : 1;
+      while (remaining > 0) {
+        d.setDate(d.getDate() + dir);
+        if (d.getDay() !== 0 && d.getDay() !== 6) remaining--;
+      }
+      return d;
+    }
+
+    const now = new Date();
+    const m1 = workdayOffset(now, -1);
+    const m2 = workdayOffset(now, -2);
     const buttons = [
-      { label: 'Today', days: 0 },
-      { label: '-1', days: -1 },
-      { label: '-2', days: -2 },
+      { label: 'Today', date: now },
+      { label: `-1 ${DAY_ABBR[m1.getDay()]}`, date: m1 },
+      { label: `-2 ${DAY_ABBR[m2.getDay()]}`, date: m2 },
     ];
 
     buttonContainer.innerHTML = `
       <div>
         <div>
           ${buttons
-            .map(
-              (btn) => `
+            .map((btn) => {
+              const y = btn.date.getFullYear();
+              const m = String(btn.date.getMonth() + 1).padStart(2, '0');
+              const d = String(btn.date.getDate()).padStart(2, '0');
+              return `
             <button type="button"
                     class="gitlab-ninja-date-btn"
-                    data-days="${btn.days}">
+                    data-date="${y}-${m}-${d}">
               ${btn.label}
             </button>
-          `
-            )
+          `;
+            })
             .join('')}
         </div>
       </div>
@@ -296,15 +315,7 @@ export class TimeEstimateModalFeature {
         e.preventDefault();
         e.stopPropagation();
 
-        const daysOffset = parseInt(btn.dataset.days || '0', 10);
-        const date = new Date();
-        date.setDate(date.getDate() + daysOffset);
-
-        // Format as YYYY-MM-DD
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const formattedDate = `${year}-${month}-${day}`;
+        const formattedDate = btn.dataset.date || '';
 
         dateInput.value = formattedDate;
 

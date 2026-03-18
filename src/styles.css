@@ -666,7 +666,8 @@ div.board-card.gn-has-edit-controls {
   color: #fff;
 }
 
-.gn-date-picker {
+.gn-date-picker,
+.gn-time-picker {
   width: 100px;
   min-width: 100px;
   padding: 3px 4px;
@@ -681,7 +682,13 @@ div.board-card.gn-has-edit-controls {
   font-family: var(--gn-font);
 }
 
-.gn-date-picker::-webkit-calendar-picker-indicator {
+.gn-time-picker {
+  width: 80px;
+  min-width: 80px;
+}
+
+.gn-date-picker::-webkit-calendar-picker-indicator,
+.gn-time-picker::-webkit-calendar-picker-indicator {
   margin: 0;
   padding: 0;
 }
@@ -811,7 +818,8 @@ div.board-card.gn-has-edit-controls {
     background: #4f46e5;
   }
 
-  .gn-date-picker {
+  .gn-date-picker,
+  .gn-time-picker {
     background: #252536;
     border-color: #414158;
     color: #c5c5da;
@@ -1001,7 +1009,8 @@ div.board-card.gn-has-edit-controls {
   background: #4f46e5;
 }
 
-.gl-dark .gn-date-picker {
+.gl-dark .gn-date-picker,
+.gl-dark .gn-time-picker {
   background: #252536;
   border-color: #414158;
   color: #c5c5da;
@@ -1161,7 +1170,8 @@ div.board-card.gn-has-edit-controls {
   background: #4f46e5;
 }
 
-.gn-force-dark .gn-date-picker {
+.gn-force-dark .gn-date-picker,
+.gn-force-dark .gn-time-picker {
   background: #252536;
   border-color: #414158;
   color: #c5c5da;
@@ -1339,7 +1349,8 @@ div.board-card.gn-has-edit-controls {
   background: #4f46e5;
 }
 
-.gn-force-light .gn-date-picker {
+.gn-force-light .gn-date-picker,
+.gn-force-light .gn-time-picker {
   background: #f8f9fa;
   border-color: #dee2e6;
   color: #495057;

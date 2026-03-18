@@ -28,11 +28,30 @@ const SPENT_PRESETS = [
   { label: '1d', value: '1d' },
 ];
 
-const DATE_PRESETS = [
-  { label: 'today', offset: 0 },
-  { label: '-1', offset: -1 },
-  { label: '-2', offset: -2 },
-];
+const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+/** Go back N workdays (skipping weekends) from a given date. */
+function workdayOffset(from: Date, workdays: number): Date {
+  const d = new Date(from);
+  let remaining = Math.abs(workdays);
+  const dir = workdays < 0 ? -1 : 1;
+  while (remaining > 0) {
+    d.setDate(d.getDate() + dir);
+    if (d.getDay() !== 0 && d.getDay() !== 6) remaining--;
+  }
+  return d;
+}
+
+function buildDatePresets() {
+  const today = new Date();
+  const m1 = workdayOffset(today, -1);
+  const m2 = workdayOffset(today, -2);
+  return [
+    { label: 'now', date: today, setTime: true },
+    { label: `-1 ${DAY_ABBR[m1.getDay()]}`, date: m1, setTime: false },
+    { label: `-2 ${DAY_ABBR[m2.getDay()]}`, date: m2, setTime: false },
+  ];
+}
 
 function stopBubble(e: Event): void {
   e.stopPropagation();
@@ -198,18 +217,18 @@ export class EditModeFeature {
   ): void {
     let selectedSpent: string | null = null;
     let selectedDate = formatDate(new Date());
+    const nowTime = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
+    let selectedTime = nowTime;
 
     const spentBtns = SPENT_PRESETS.map(
       (p) =>
         `<button type="button" class="gn-preset-btn" data-value="${p.value}">${p.label}</button>`
     ).join('');
 
-    const today = new Date();
-    const dateBtns = DATE_PRESETS.map((p) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() + p.offset);
-      const iso = formatDate(d);
-      return `<button type="button" class="gn-date-btn${p.offset === 0 ? ' gn-active' : ''}" data-date="${iso}">${p.label}</button>`;
+    const datePresets = buildDatePresets();
+    const dateBtns = datePresets.map((p) => {
+      const iso = formatDate(p.date);
+      return `<button type="button" class="gn-date-btn${p.label === 'now' ? ' gn-active' : ''}" data-date="${iso}" data-set-time="${p.setTime}">${p.label}</button>`;
     }).join('');
 
     const spentStr = timeInfo.spent > 0 ? formatHours(timeInfo.spent) : '0h';
@@ -227,6 +246,7 @@ export class EditModeFeature {
         <span class="gn-edit-label">Date:</span>
         <div class="gn-preset-group">${dateBtns}</div>
         <input type="date" class="gn-date-picker" value="${selectedDate}" />
+        <input type="time" class="gn-time-picker" value="${selectedTime}" />
       </div>
       <div class="gn-edit-row">
         <span class="gn-edit-label">Note:</span>
@@ -251,11 +271,12 @@ export class EditModeFeature {
       });
     });
 
-    // Date picker
+    // Date & time pickers
     const datePicker = controls.querySelector<HTMLInputElement>('.gn-date-picker');
-    if (!datePicker) return;
+    const timePicker = controls.querySelector<HTMLInputElement>('.gn-time-picker');
+    if (!datePicker || !timePicker) return;
 
-    // Date selection
+    // Date preset selection
     controls.querySelectorAll<HTMLButtonElement>('.gn-date-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -263,6 +284,13 @@ export class EditModeFeature {
         btn.classList.add('gn-active');
         selectedDate = btn.dataset.date ?? selectedDate;
         datePicker.value = selectedDate;
+        if (btn.dataset.setTime === 'true') {
+          const now = new Date();
+          selectedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        } else {
+          selectedTime = '';
+        }
+        timePicker.value = selectedTime;
       });
     });
     datePicker.addEventListener('click', stopBubble);
@@ -273,6 +301,14 @@ export class EditModeFeature {
       e.stopPropagation();
       selectedDate = datePicker.value;
       controls.querySelectorAll('.gn-date-btn').forEach((b) => b.classList.remove('gn-active'));
+    });
+    timePicker.addEventListener('click', stopBubble);
+    timePicker.addEventListener('mousedown', stopBubble);
+    timePicker.addEventListener('focus', stopBubble);
+    timePicker.addEventListener('keydown', (e) => e.stopPropagation());
+    timePicker.addEventListener('change', (e) => {
+      e.stopPropagation();
+      selectedTime = timePicker.value;
     });
 
     // Summary input event blocking
@@ -296,12 +332,13 @@ export class EditModeFeature {
       submitBtn.disabled = true;
       submitBtn.textContent = '...';
 
+      const spentAt = selectedTime ? `${selectedDate}T${selectedTime}:00` : selectedDate;
       const ok = await addTimeSpent(
         projectPath,
         extractIidFromCacheKey(iid),
         selectedSpent,
         summary,
-        selectedDate
+        spentAt
       );
       if (ok) {
         const hours = this.durationToHours(selectedSpent);

@@ -862,6 +862,13 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       dateInput.value = activeFilterDate || localDateStr(new Date());
       dateInput.style.maxWidth = '140px';
 
+      const timeInput = document.createElement('input');
+      timeInput.type = 'time';
+      timeInput.className = 'timelog-inline-input';
+      const now = new Date();
+      timeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      timeInput.style.maxWidth = '100px';
+
       const durInput = document.createElement('input');
       durInput.type = 'text';
       durInput.className = 'timelog-inline-input';
@@ -883,6 +890,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
 
       form.appendChild(descInput);
       form.appendChild(dateInput);
+      form.appendChild(timeInput);
       form.appendChild(durInput);
       form.appendChild(actions);
 
@@ -898,6 +906,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       async function save() {
         const duration = durInput.value.trim();
         const date = dateInput.value;
+        const timeVal = timeInput.value;
         const note = descInput.value.trim();
 
         if (!duration || !date) {
@@ -910,10 +919,12 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
         saveBtn.textContent = '...';
         descInput.disabled = true;
         dateInput.disabled = true;
+        timeInput.disabled = true;
         durInput.disabled = true;
 
+        const spentAt = timeVal ? `${date}T${timeVal}:00` : date;
         try {
-          await createTimelog(issueGid, duration, date, note);
+          await createTimelog(issueGid, duration, spentAt, note);
           await loadWeek();
         } catch (err: any) {
           alert(`Failed to add time log: ${err.message}`);
@@ -923,7 +934,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
 
       cancelBtn.addEventListener('click', cancel);
       saveBtn.addEventListener('click', save);
-      [descInput, dateInput, durInput].forEach((input) => {
+      [descInput, dateInput, timeInput, durInput].forEach((input) => {
         input.addEventListener('keydown', (ev) => {
           if (ev.key === 'Escape') cancel();
           if (ev.key === 'Enter') save();
@@ -1149,6 +1160,12 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
   html += renderBreakdownSections(entries, null);
 
   content.innerHTML = html;
+
+  // Scroll to 8:30 by default on initial render
+  const calBody = content.querySelector('.cal-body');
+  if (calBody && calBody.scrollTop === 0) {
+    calBody.scrollTop = (8.5 - gridStartHour) * CAL_PX_PER_HOUR;
+  }
 
   // Attach calendar interactions
   attachCalendarInteractions(content, gridStartHour);
@@ -1458,7 +1475,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
       if (target.closest('.cal-block')) return;
 
       const rect = (col as HTMLElement).getBoundingClientRect();
-      const y = e.clientY - rect.top + (col.closest('.cal-body') as HTMLElement).scrollTop;
+      const y = e.clientY - rect.top;
       const snappedY = snapToGrid(y);
       const timeStr = pxToTimeStr(snappedY);
       const date = (col as HTMLElement).dataset.date!;
@@ -1517,7 +1534,10 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
       </div>
       <div style="flex:1">
         <label class="form-label">Time</label>
-        <input class="form-input" type="time" id="popTime" value="${timeStr}" style="max-width:100%;color-scheme:dark">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="form-input" type="time" id="popTime" value="${timeStr}" style="max-width:100%;color-scheme:dark">
+          <button type="button" class="timelog-save-btn" id="popNowBtn" style="padding:4px 8px;white-space:nowrap">now</button>
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -1541,6 +1561,14 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
 
   overlay.addEventListener('click', closeAllPopovers);
   popover.querySelector('#popCancel')!.addEventListener('click', closeAllPopovers);
+
+  // "now" button
+  popover.querySelector('#popNowBtn')!.addEventListener('click', () => {
+    const now = new Date();
+    (popover.querySelector('#popDate') as HTMLInputElement).value = localDateStr(now);
+    (popover.querySelector('#popTime') as HTMLInputElement).value =
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   popover.querySelector('#popDelete')!.addEventListener('click', async () => {
     if (!confirm('Delete this time log?')) return;
@@ -1647,9 +1675,18 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
       <label class="form-label">Duration</label>
       <input class="form-input" type="text" id="popDuration" placeholder="1h30m" style="max-width:100%">
     </div>
-    <div class="form-row">
-      <label class="form-label">Date</label>
-      <input class="form-input" type="date" id="popDate" value="${date}" style="max-width:100%;color-scheme:dark">
+    <div class="form-row" style="display:flex;gap:10px">
+      <div style="flex:1">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="popDate" value="${date}" style="max-width:100%;color-scheme:dark">
+      </div>
+      <div style="flex:1">
+        <label class="form-label">Time</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="form-input" type="time" id="popTime" value="${time}" style="max-width:100%;color-scheme:dark">
+          <button type="button" class="timelog-save-btn" id="popNowBtn" style="padding:4px 8px;white-space:nowrap">now</button>
+        </div>
+      </div>
     </div>
     <div class="form-row">
       <label class="form-label">Note</label>
@@ -1663,6 +1700,14 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
 
   document.body.appendChild(popover);
   positionPopover(popover, x, y);
+
+  // "now" button
+  popover.querySelector('#popNowBtn')!.addEventListener('click', () => {
+    const now = new Date();
+    (popover.querySelector('#popDate') as HTMLInputElement).value = localDateStr(now);
+    (popover.querySelector('#popTime') as HTMLInputElement).value =
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
 
   const issueSearchInput = popover.querySelector('#popIssueSearch') as HTMLInputElement;
   const issueGidInput = popover.querySelector('#popIssueGid') as HTMLInputElement;
@@ -1780,6 +1825,7 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
 
     const duration = (popover.querySelector('#popDuration') as HTMLInputElement).value.trim();
     const dateVal = (popover.querySelector('#popDate') as HTMLInputElement).value;
+    const timeVal = (popover.querySelector('#popTime') as HTMLInputElement).value;
     const note = (popover.querySelector('#popNote') as HTMLInputElement).value.trim();
 
     if (!duration || !dateVal) {
@@ -1794,7 +1840,7 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     saveBtn.disabled = true;
     saveBtn.textContent = '...';
 
-    const spentAt = time ? `${dateVal}T${time}:00` : dateVal;
+    const spentAt = timeVal ? `${dateVal}T${timeVal}:00` : dateVal;
     closeAllPopovers();
     const ok = await performMutation(async () => {
       await createTimelog(issueGid, duration, spentAt, note);
@@ -1807,7 +1853,7 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     }
   });
 
-  popover.querySelectorAll<HTMLInputElement>('#popDuration, #popDate, #popNote').forEach((input) => {
+  popover.querySelectorAll<HTMLInputElement>('#popDuration, #popDate, #popTime, #popNote').forEach((input) => {
     input.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') closeAllPopovers();
       if (ev.key === 'Enter') (popover.querySelector('#popSave') as HTMLElement).click();
