@@ -40,6 +40,7 @@ if [ -z "${APPLE_TEAM_ID:-}" ]; then
 fi
 
 VERSION=$(grep '"version"' package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+BUILD_VERSION=$(git rev-list --count HEAD)
 SAFARI_DIST="$ROOT_DIR/dist/safari"
 XCODE_PROJECT_DIR="$ROOT_DIR/safari-extension"
 ARCHIVE_PATH_MACOS="$ROOT_DIR/build/GitLabNinja-macOS.xcarchive"
@@ -51,7 +52,7 @@ BUNDLE_ID="dev.andycodes.gitlab-ninja"
 SCHEME_MACOS="$APP_NAME (macOS)"
 SCHEME_IOS="$APP_NAME (iOS)"
 
-echo "=== GitLab Ninja Safari Release v$VERSION ==="
+echo "=== GitLab Ninja Safari Release v$VERSION ($BUILD_VERSION) ==="
 echo ""
 
 # ── Step 1: Build extension ──
@@ -95,6 +96,20 @@ xcrun safari-web-extension-converter "$SAFARI_DIST" \
 sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic;\\
 				DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" \
     "$XCODE_PROJECT_DIR/$APP_NAME/$APP_NAME.xcodeproj/project.pbxproj"
+# Set version number in the Xcode project file (converter defaults to 1.0)
+sed -i '' "s/MARKETING_VERSION = 1.0;/MARKETING_VERSION = $VERSION;/g" \
+    "$XCODE_PROJECT_DIR/$APP_NAME/$APP_NAME.xcodeproj/project.pbxproj"
+sed -i '' "s/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = $BUILD_VERSION;/g" \
+    "$XCODE_PROJECT_DIR/$APP_NAME/$APP_NAME.xcodeproj/project.pbxproj"
+# Apply custom app UI (feature showcase for iOS, replaces default placeholder)
+CUSTOMIZATIONS_DIR="$ROOT_DIR/safari-customizations"
+if [ -d "$CUSTOMIZATIONS_DIR" ]; then
+    cp -R "$CUSTOMIZATIONS_DIR/" "$XCODE_PROJECT_DIR/$APP_NAME/"
+    echo "     Applied Safari app customizations."
+fi
+# Enable scrolling in iOS app (converter generates scrollEnabled = false)
+sed -i '' 's/isScrollEnabled = false/isScrollEnabled = true/' \
+    "$XCODE_PROJECT_DIR/$APP_NAME/Shared (App)/ViewController.swift"
 echo "     Done."
 
 if [ "$MODE" = "xcode" ]; then
@@ -120,7 +135,7 @@ xcodebuild archive \
     CODE_SIGN_STYLE=Automatic \
     DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
     MARKETING_VERSION="$VERSION" \
-    CURRENT_PROJECT_VERSION="$VERSION" \
+    CURRENT_PROJECT_VERSION="$BUILD_VERSION" \
     | tail -5
 
 echo "     Archiving for iOS..."
@@ -133,7 +148,7 @@ xcodebuild archive \
     CODE_SIGN_STYLE=Automatic \
     DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
     MARKETING_VERSION="$VERSION" \
-    CURRENT_PROJECT_VERSION="$VERSION" \
+    CURRENT_PROJECT_VERSION="$BUILD_VERSION" \
     | tail -5
 
 echo "     Archives created."
