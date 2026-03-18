@@ -953,20 +953,8 @@ interface CalBlock {
 
 const CAL_PX_PER_HOUR = 80;
 
-function computeGridRange(timelogs: TimelogDetail[]): { startHour: number; endHour: number } {
-  let minHour = 8;
-  let maxHour = 18;
-  for (const log of timelogs) {
-    const t = parseTimeFromISO(log.spentAt);
-    const startH = t.hours + t.minutes / 60;
-    const endH = startH + log.timeSpent / 3600;
-    if (startH < minHour) minHour = startH;
-    if (endH > maxHour) maxHour = endH;
-  }
-  return {
-    startHour: Math.floor(Math.max(0, minHour - 0.5)),
-    endHour: Math.ceil(Math.min(24, maxHour + 0.5)),
-  };
+function computeGridRange(_timelogs: TimelogDetail[]): { startHour: number; endHour: number } {
+  return { startHour: 0, endHour: 24 };
 }
 
 function computeBlockPositions(
@@ -1284,6 +1272,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
     startY: number;
     originalTop: number;
     originalHeight: number;
+    mouseOffsetInBlock: number;
     targetDayColumn: HTMLElement;
     hasMoved: boolean;
   } | null = null;
@@ -1309,6 +1298,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
       startY: e.clientY,
       originalTop: block.offsetTop,
       originalHeight: block.offsetHeight,
+      mouseOffsetInBlock: e.clientY - block.getBoundingClientRect().top,
       targetDayColumn: dayColumn,
       hasMoved: false,
     };
@@ -1325,7 +1315,8 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
       document.body.style.userSelect = 'none';
 
       if (dragState.type === 'move') {
-        const newTop = snapToGrid(Math.max(0, dragState.originalTop + dy));
+        const colRect = dragState.targetDayColumn.getBoundingClientRect();
+        const newTop = snapToGrid(Math.max(0, ev.clientY - colRect.top - dragState.mouseOffsetInBlock));
         dragState.block.style.top = `${newTop}px`;
         dragState.block.classList.add('cal-dragging');
         document.body.style.cursor = 'grabbing';
@@ -1596,28 +1587,45 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
   });
 }
 
+async function searchAssignedIssues(
+  query: string
+): Promise<{ gid: string; title: string; iid: number; projectName: string }[]> {
+  if (!gitlabUrl || !apiToken || query.length < 2) return [];
+  try {
+    const params = new URLSearchParams({
+      scope: 'assigned_to_me',
+      search: query,
+      state: 'opened',
+      per_page: '15',
+    });
+    const res = await fetch(`${gitlabUrl}/api/v4/issues?${params}`, {
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((issue: any) => ({
+      gid: `gid://gitlab/Issue/${issue.id}`,
+      title: issue.title,
+      iid: issue.iid,
+      projectName: (issue.references?.full ?? '').split('#')[0].replace(/\/$/, '') || String(issue.project_id),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function showAddPopover(x: number, y: number, date: string, time: string) {
   closeAllPopovers();
 
-  // Build issue options from cached timelogs
+  // Build initial issue list from cached timelogs (deduplicated, sorted by recency)
   const seen = new Set<string>();
-  const issues: { gid: string; title: string; iid: number }[] = [];
-  for (const log of cachedTimelogs) {
+  const cachedIssues: { gid: string; title: string; iid: number; projectName: string }[] = [];
+  for (const log of [...cachedTimelogs].reverse()) {
     if (!seen.has(log.issueGid)) {
       seen.add(log.issueGid);
-      issues.push({ gid: log.issueGid, title: log.issueTitle, iid: log.issueIid });
+      cachedIssues.push({ gid: log.issueGid, title: log.issueTitle, iid: log.issueIid, projectName: log.projectName });
     }
   }
-  issues.sort((a, b) => a.iid - b.iid);
-
-  if (issues.length === 0) {
-    // No issues to add to — can't show add form
-    return;
-  }
-
-  const optionsHtml = issues
-    .map((iss) => `<option value="${iss.gid}">#${iss.iid} ${escapeHtml(iss.title)}</option>`)
-    .join('');
 
   const overlay = document.createElement('div');
   overlay.className = 'cal-popover-overlay';
@@ -1629,7 +1637,11 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     <div class="cal-popover-title">Add Time Log</div>
     <div class="form-row">
       <label class="form-label">Issue</label>
-      <select class="form-input" id="popIssue" style="max-width:100%">${optionsHtml}</select>
+      <div class="issue-search-wrapper">
+        <input class="form-input" type="text" id="popIssueSearch" placeholder="Search issues…" autocomplete="off" style="max-width:100%">
+        <input type="hidden" id="popIssueGid">
+        <div class="issue-search-dropdown" id="popIssueDropdown"></div>
+      </div>
     </div>
     <div class="form-row">
       <label class="form-label">Duration</label>
@@ -1652,13 +1664,120 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
   document.body.appendChild(popover);
   positionPopover(popover, x, y);
 
-  (popover.querySelector('#popDuration') as HTMLInputElement).focus();
+  const issueSearchInput = popover.querySelector('#popIssueSearch') as HTMLInputElement;
+  const issueGidInput = popover.querySelector('#popIssueGid') as HTMLInputElement;
+  const dropdown = popover.querySelector('#popIssueDropdown') as HTMLDivElement;
+
+  // All issues available for search (starts with cached, API results merged in)
+  let allIssues = [...cachedIssues];
+  let activeIndex = -1;
+  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  function getFilteredIssues(query: string) {
+    const q = query.trim().toLowerCase();
+    if (!q) return allIssues.slice(0, 12);
+    return allIssues
+      .filter((iss) => iss.title.toLowerCase().includes(q) || String(iss.iid).includes(q))
+      .slice(0, 12);
+  }
+
+  function renderDropdown(items: typeof allIssues) {
+    activeIndex = -1;
+    if (items.length === 0) {
+      dropdown.innerHTML = `<div class="issue-search-empty">No issues found</div>`;
+    } else {
+      dropdown.innerHTML = items
+        .map(
+          (iss) =>
+            `<div class="issue-search-item" data-gid="${iss.gid}">#${iss.iid} ${escapeHtml(iss.title)}</div>`
+        )
+        .join('');
+      dropdown.querySelectorAll('.issue-search-item').forEach((item) => {
+        item.addEventListener('mousedown', (ev) => {
+          ev.preventDefault(); // prevent blur on search input
+          selectIssue((item as HTMLElement).dataset.gid!);
+        });
+      });
+    }
+    dropdown.classList.add('visible');
+  }
+
+  function selectIssue(gid: string) {
+    const iss = allIssues.find((i) => i.gid === gid);
+    if (iss) {
+      issueSearchInput.value = `#${iss.iid} ${iss.title}`;
+      issueGidInput.value = gid;
+    }
+    dropdown.classList.remove('visible');
+    activeIndex = -1;
+  }
+
+  issueSearchInput.addEventListener('focus', () => {
+    renderDropdown(getFilteredIssues(issueSearchInput.value));
+  });
+
+  issueSearchInput.addEventListener('input', () => {
+    issueGidInput.value = '';
+    const query = issueSearchInput.value;
+    renderDropdown(getFilteredIssues(query));
+
+    // Debounced API search to supplement cached results
+    if (searchDebounce) clearTimeout(searchDebounce);
+    if (query.trim().length >= 2) {
+      searchDebounce = setTimeout(async () => {
+        const apiResults = await searchAssignedIssues(query.trim());
+        const existingGids = new Set(allIssues.map((i) => i.gid));
+        for (const r of apiResults) {
+          if (!existingGids.has(r.gid)) allIssues.push(r);
+        }
+        renderDropdown(getFilteredIssues(query));
+      }, 300);
+    }
+  });
+
+  issueSearchInput.addEventListener('keydown', (ev) => {
+    const items = dropdown.querySelectorAll<HTMLElement>('.issue-search-item[data-gid]');
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    } else if (ev.key === 'Enter' && activeIndex >= 0) {
+      ev.preventDefault();
+      const gid = items[activeIndex]?.dataset.gid;
+      if (gid) selectIssue(gid);
+    } else if (ev.key === 'Escape') {
+      dropdown.classList.remove('visible');
+    }
+  });
+
+  issueSearchInput.addEventListener('blur', () => {
+    // Small delay so mousedown on item fires first
+    setTimeout(() => dropdown.classList.remove('visible'), 150);
+  });
 
   overlay.addEventListener('click', closeAllPopovers);
   popover.querySelector('#popCancel')!.addEventListener('click', closeAllPopovers);
 
   popover.querySelector('#popSave')!.addEventListener('click', async () => {
-    const issueGid = (popover.querySelector('#popIssue') as HTMLSelectElement).value;
+    let issueGid = issueGidInput.value;
+    // If no explicit selection, try to match the typed text
+    if (!issueGid) {
+      const q = issueSearchInput.value.trim().toLowerCase();
+      const match = allIssues.find(
+        (iss) => iss.title.toLowerCase() === q || `#${iss.iid}` === q
+      );
+      if (match) {
+        issueGid = match.gid;
+      } else {
+        issueSearchInput.style.borderColor = 'var(--red)';
+        return;
+      }
+    }
+
     const duration = (popover.querySelector('#popDuration') as HTMLInputElement).value.trim();
     const dateVal = (popover.querySelector('#popDate') as HTMLInputElement).value;
     const note = (popover.querySelector('#popNote') as HTMLInputElement).value.trim();
@@ -1688,12 +1807,14 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     }
   });
 
-  popover.querySelectorAll('input').forEach((input) => {
+  popover.querySelectorAll<HTMLInputElement>('#popDuration, #popDate, #popNote').forEach((input) => {
     input.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') closeAllPopovers();
       if (ev.key === 'Enter') (popover.querySelector('#popSave') as HTMLElement).click();
     });
   });
+
+  issueSearchInput.focus();
 }
 
 // ── Calendar Month View ──
