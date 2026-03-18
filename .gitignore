@@ -11,6 +11,8 @@ build/
 GitLab Ninja/
 safari-extension/
 
+ExportOptions.plist
+
 # TypeScript
 *.tsbuildinfo
 
