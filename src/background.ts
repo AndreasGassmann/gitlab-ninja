@@ -233,7 +233,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 const DYNAMIC_CONTENT_SCRIPT_ID = 'gitlab-ninja-custom-domain';
 const DYNAMIC_INJECTED_SCRIPT_ID = 'gitlab-ninja-custom-domain-injected';
 
-async function registerCustomDomainScript(): Promise<void> {
+// Serialize calls to avoid duplicate registration races
+let registerPromise: Promise<void> = Promise.resolve();
+function registerCustomDomainScript(): Promise<void> {
+  registerPromise = registerPromise.then(registerCustomDomainScriptImpl, registerCustomDomainScriptImpl);
+  return registerPromise;
+}
+
+async function registerCustomDomainScriptImpl(): Promise<void> {
   // Unregister any existing dynamic scripts
   const existing = await chrome.scripting.getRegisteredContentScripts({
     ids: [DYNAMIC_CONTENT_SCRIPT_ID, DYNAMIC_INJECTED_SCRIPT_ID],
