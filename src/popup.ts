@@ -910,6 +910,7 @@ function renderTemplateList() {
       const timeParts: string[] = [];
       if (tpl.estimate) timeParts.push(`est ${tpl.estimate}`);
       if (tpl.timeSpent) timeParts.push(`spent ${tpl.timeSpent}`);
+      if (tpl.spentAtTime) timeParts.push(`at ${tpl.spentAtTime}`);
       const timeStr = timeParts.length > 0 ? timeParts.join(' · ') : '';
       const meta = [projectShort, timeStr].filter(Boolean).join(' · ');
 
