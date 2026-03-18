@@ -41,7 +41,11 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "gitlab-ninja@andycodes.dev"
+      "id": "gitlab-ninja@andycodes.dev",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
     }
   },
   "options_ui": {
