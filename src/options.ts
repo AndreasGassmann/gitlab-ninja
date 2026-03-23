@@ -35,6 +35,9 @@ interface TimelogDetail {
   note: string;
   timeSpent: number; // seconds
   spentAt: string; // Full ISO datetime e.g. "2026-03-09T17:36:06+01:00"
+  issueState: string; // opened, closed
+  timeEstimate: number; // seconds
+  totalTimeSpent: number; // seconds
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -240,6 +243,7 @@ async function fetchWeekTimelogs(
             iid
             title
             webUrl
+            state
             timeEstimate
             totalTimeSpent
             labels {
@@ -292,6 +296,9 @@ async function fetchWeekTimelogs(
       note: node.summary || '',
       timeSpent: node.timeSpent,
       spentAt: fullSpentAt,
+      issueState: node.issue.state || 'opened',
+      timeEstimate: node.issue.timeEstimate || 0,
+      totalTimeSpent: node.issue.totalTimeSpent || 0,
     });
 
     const existing = map.get(key);
@@ -1560,10 +1567,44 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
   const timeStr = formatTimeFromISO(log.spentAt);
   const useTextarea = log.note.length > 40;
 
+  const stateLabel = log.issueState === 'closed' ? 'Closed' : 'Open';
+  const stateColor = log.issueState === 'closed' ? 'var(--red)' : 'var(--green, #22c55e)';
+  const pctLogged = log.timeEstimate > 0 ? Math.round((log.totalTimeSpent / log.timeEstimate) * 100) : null;
+  const pctColor = pctLogged !== null ? (pctLogged > 100 ? 'var(--red)' : 'var(--green, #22c55e)') : 'var(--text-muted, #aaa)';
+
+  // Collect all timelogs for the same issue, sorted by date
+  const issueTimelogs = cachedTimelogs
+    .filter((t) => t.issueGid === log.issueGid)
+    .sort((a, b) => a.spentAt.localeCompare(b.spentAt));
+  const issueLogsHtml = issueTimelogs.length > 1
+    ? `<div style="font-size:12px;margin-bottom:8px;max-height:120px;overflow-y:auto">
+        <label class="form-label" style="margin-bottom:4px">Time logs this week</label>
+        ${issueTimelogs.map((t) => {
+          const isCurrent = t.id === log.id;
+          const date = getDateFromSpentAt(t.spentAt);
+          const time = formatTimeFromISO(t.spentAt);
+          const noteSnippet = t.note ? ' — ' + escapeHtml(t.note.length > 30 ? t.note.slice(0, 30) + '…' : t.note) : '';
+          return `<div style="display:flex;gap:6px;padding:2px 4px;border-radius:4px;${isCurrent ? 'background:rgba(255,255,255,0.08);font-weight:600' : ''};color:var(--text-muted, #aaa)">
+            <span style="min-width:70px">${date.slice(5)}</span>
+            <span style="min-width:40px">${time}</span>
+            <span style="min-width:40px;text-align:right">${formatDuration(t.timeSpent)}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${noteSnippet}</span>
+          </div>`;
+        }).join('')}
+      </div>`
+    : '';
+
   const popover = document.createElement('div');
   popover.className = 'cal-popover';
   popover.innerHTML = `
     <div class="cal-popover-title">#${log.issueIid} ${escapeHtml(log.issueTitle)}</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--text-muted, #aaa)">
+      <span style="color:${stateColor};font-weight:600">${stateLabel}</span>
+      <span>${escapeHtml(log.projectName)}</span>
+      <span title="Total time logged / Estimate">${formatDuration(log.totalTimeSpent)}${log.timeEstimate > 0 ? ' / ' + formatDuration(log.timeEstimate) : ''}</span>
+      ${pctLogged !== null ? `<span style="color:${pctColor};font-weight:600">${pctLogged}%</span>` : ''}
+    </div>
+    ${issueLogsHtml}
     <div class="form-row">
       <label class="form-label">Duration</label>
       <input class="form-input" type="text" id="popDuration" value="${formatDurationInput(log.timeSpent)}" placeholder="1h30m" style="max-width:100%">
