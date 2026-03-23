@@ -660,6 +660,10 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
           <td class="timelog-desc-cell" colspan="2">
             <span class="timelog-indent"></span>
             <span class="timelog-summary-display" data-timelog-id="${log.id}">${log.note ? escapeHtml(log.note) : '<span class="text-muted">No description</span>'}</span>
+            <span class="timelog-row-actions">
+              <button class="timelog-action-btn timelog-duplicate-btn" data-timelog-id="${log.id}" title="Duplicate">Dup</button>
+              <button class="timelog-action-btn timelog-split-btn" data-timelog-id="${log.id}" title="Split into two">Split</button>
+            </span>
           </td>
           <td class="date-cell timelog-editable-cell">
             <span class="timelog-field-display timelog-date-display" data-timelog-id="${log.id}">${dateLabel}</span>
@@ -794,8 +798,8 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
         const newDuration = field === 'duration' ? val : formatDurationInput(log.timeSpent);
         const newNote = field === 'summary' ? val : log.note;
 
-        await deleteTimelog(log.id);
         await createTimelog(log.issueGid, newDuration, newDate, newNote);
+        await deleteTimelog(log.id);
         await loadWeek();
       } catch (err: any) {
         alert(`Failed to save: ${err.message}`);
@@ -832,6 +836,41 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       const id = (el as HTMLElement).dataset.timelogId!;
       const log = cachedTimelogs.find((t) => t.id === id);
       if (log) startEdit(el as HTMLElement, log, 'duration');
+    });
+  });
+
+  // ── Duplicate / Split buttons ──
+  content.querySelectorAll('.timelog-duplicate-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.timelogId!;
+      const log = cachedTimelogs.find((t) => t.id === id);
+      if (!log) return;
+      const ok = await performMutation(async () => {
+        await createTimelog(log.issueGid, formatDurationInput(log.timeSpent), log.spentAt, log.note);
+      });
+      if (ok) await loadWeek();
+    });
+  });
+
+  content.querySelectorAll('.timelog-split-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.timelogId!;
+      const log = cachedTimelogs.find((t) => t.id === id);
+      if (!log || log.timeSpent < 120) return; // min 2 minutes to split
+      const firstHalf = Math.ceil(log.timeSpent / 2);
+      const secondHalf = log.timeSpent - firstHalf;
+      // Second entry starts after the first half
+      const startDate = new Date(log.spentAt);
+      const secondStart = new Date(startDate.getTime() + firstHalf * 1000);
+      const secondSpentAt = `${localDateStr(secondStart)}T${String(secondStart.getHours()).padStart(2, '0')}:${String(secondStart.getMinutes()).padStart(2, '0')}:00`;
+      const ok = await performMutation(async () => {
+        await createTimelog(log.issueGid, formatDurationInput(firstHalf), log.spentAt, log.note);
+        await createTimelog(log.issueGid, formatDurationInput(secondHalf), secondSpentAt, log.note);
+        await deleteTimelog(log.id);
+      });
+      if (ok) await loadWeek();
     });
   });
 
@@ -1409,13 +1448,13 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
 
         // Fire-and-forget: API call + background sync
         performMutation(async () => {
-          await deleteTimelog(log.id);
           await createTimelog(
             log.issueGid,
             formatDurationInput(log.timeSpent),
             newSpentAt,
             log.note
           );
+          await deleteTimelog(log.id);
         }).then(async (ok) => {
           if (!ok) {
             // Revert optimistic update on failure
@@ -1434,13 +1473,13 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
         state.block.style.opacity = '1';
 
         performMutation(async () => {
-          await deleteTimelog(log.id);
           await createTimelog(
             log.issueGid,
             formatDurationInput(newDuration),
             getDateFromSpentAt(log.spentAt),
             log.note
           );
+          await deleteTimelog(log.id);
         }).then(async (ok) => {
           if (!ok) {
             log.timeSpent = oldTimeSpent;
@@ -1550,6 +1589,8 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
     </div>
     <div class="cal-popover-actions">
       <button class="timelog-cancel-btn" id="popDelete" style="color:var(--red);border-color:rgba(248,113,113,0.3)">Delete</button>
+      <button class="timelog-cancel-btn" id="popDuplicate">Dup</button>
+      <button class="timelog-cancel-btn" id="popSplit">Split</button>
       <span style="flex:1"></span>
       <button class="timelog-cancel-btn" id="popCancel">Cancel</button>
       <button class="timelog-save-btn" id="popSave">Save</button>
@@ -1580,6 +1621,32 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
     else await silentRefresh();
   });
 
+  popover.querySelector('#popDuplicate')!.addEventListener('click', async () => {
+    closeAllPopovers();
+    const ok = await performMutation(async () => {
+      await createTimelog(log.issueGid, formatDurationInput(log.timeSpent), log.spentAt, log.note);
+    });
+    if (ok) await silentRefresh();
+    else await silentRefresh();
+  });
+
+  popover.querySelector('#popSplit')!.addEventListener('click', async () => {
+    if (log.timeSpent < 120) return; // min 2 minutes
+    closeAllPopovers();
+    const firstHalf = Math.ceil(log.timeSpent / 2);
+    const secondHalf = log.timeSpent - firstHalf;
+    const startDate = new Date(log.spentAt);
+    const secondStart = new Date(startDate.getTime() + firstHalf * 1000);
+    const secondSpentAt = `${localDateStr(secondStart)}T${String(secondStart.getHours()).padStart(2, '0')}:${String(secondStart.getMinutes()).padStart(2, '0')}:00`;
+    const ok = await performMutation(async () => {
+      await createTimelog(log.issueGid, formatDurationInput(firstHalf), log.spentAt, log.note);
+      await createTimelog(log.issueGid, formatDurationInput(secondHalf), secondSpentAt, log.note);
+      await deleteTimelog(log.id);
+    });
+    if (ok) await silentRefresh();
+    else await silentRefresh();
+  });
+
   popover.querySelector('#popSave')!.addEventListener('click', async () => {
     const duration = (popover.querySelector('#popDuration') as HTMLInputElement).value.trim();
     const date = (popover.querySelector('#popDate') as HTMLInputElement).value;
@@ -1595,8 +1662,8 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
     const spentAt = time ? `${date}T${time}:00` : date;
     closeAllPopovers();
     const ok = await performMutation(async () => {
-      await deleteTimelog(log.id);
       await createTimelog(log.issueGid, duration, spentAt, note);
+      await deleteTimelog(log.id);
     });
     if (ok) await silentRefresh();
     else {

@@ -775,6 +775,31 @@
       .timelog-row.timelog-dim:hover td {
         opacity: 0.6;
       }
+      .timelog-row-actions {
+        display: inline-flex;
+        gap: 2px;
+        margin-left: 8px;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .timelog-row:hover .timelog-row-actions {
+        opacity: 1;
+      }
+      .timelog-action-btn {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+      .timelog-action-btn:hover {
+        background: rgba(255,255,255,0.08);
+        color: var(--text-secondary);
+        border-color: rgba(255,255,255,0.1);
+      }
       .timelog-field-display,
       .timelog-summary-display {
         cursor: pointer;
@@ -1721,6 +1746,9 @@
         height: 8px;
         border-radius: 50%;
       }
+      .github-link:hover {
+        border-color: var(--border-focus) !important;
+      }
     </style>
   </head>
   <body>
@@ -2162,8 +2190,7 @@
                   font-weight: 500;
                   transition: all 0.2s;
                 "
-                onmouseover="this.style.borderColor = 'var(--border-focus)'"
-                onmouseout="this.style.borderColor = 'var(--border)'"
+                class="github-link"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path
