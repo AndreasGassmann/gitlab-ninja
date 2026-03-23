@@ -351,12 +351,14 @@ async function createTimelog(
   note: string
 ): Promise<void> {
   if (!gitlabUrl || !apiToken) throw new Error('Not configured');
+  // Default to 09:00 when no time component is provided
+  const fullSpentAt = spentAt.includes('T') ? spentAt : `${spentAt}T09:00:00`;
   const escapedNote = note.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   const mutation = `mutation {
     timelogCreate(input: {
       issuableId: "${issueGid}",
       timeSpent: "${timeSpent}",
-      spentAt: "${spentAt}",
+      spentAt: "${fullSpentAt}",
       summary: "${escapedNote}"
     }) { errors }
   }`;
