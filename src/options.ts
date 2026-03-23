@@ -2588,6 +2588,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  const aboutVersion = document.getElementById('aboutVersion');
+  if (aboutVersion) {
+    aboutVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
+  }
+
   initSettingsTabs();
   initNotificationSettings();
   renderThemeModeSelector();
