@@ -75,13 +75,16 @@ export class AutoAssignFeature {
     // an issue creation field (not a regular card). These typically appear as
     // siblings of the card list or at the end of a column.
     const inputs = document.querySelectorAll<HTMLElement>(
-      '.board-list input[type="text"]:not(.gn-summary-input), ' +
+      '.board-list input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input), ' +
         '.board-list textarea, ' +
-        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input), ' +
+        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input), ' +
         '[data-testid="board-list"] textarea'
     );
 
     inputs.forEach((input) => {
+      // Skip inputs inside edit controls (editMode feature)
+      if (input.closest('.gn-edit-controls')) return;
+
       // Walk up to find the form/wrapper card
       const wrapper =
         input.closest('form, [class*="new-issue"], [class*="BoardNewIssue"], .board-card-create') ||

@@ -103,10 +103,13 @@ export class BoardRecentProjectsFeature {
 
     // Fallback: board list inputs not caught by known selectors
     const inputs = document.querySelectorAll<HTMLElement>(
-      '.board-list input[type="text"]:not(.gn-summary-input), ' +
-        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input)'
+      '.board-list input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input), ' +
+        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input)'
     );
     inputs.forEach((input) => {
+      // Skip inputs inside edit controls (editMode feature)
+      if (input.closest('.gn-edit-controls')) return;
+
       const wrapper =
         input.closest('form, [class*="new-issue"], [class*="BoardNewIssue"], .board-card-create') ||
         input.parentElement;

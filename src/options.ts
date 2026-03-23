@@ -1476,7 +1476,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
           await createTimelog(
             log.issueGid,
             formatDurationInput(newDuration),
-            getDateFromSpentAt(log.spentAt),
+            log.spentAt,
             log.note
           );
           await deleteTimelog(log.id);

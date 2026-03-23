@@ -1,4 +1,5 @@
 import { loadThemeMode, ThemeMode } from './utils/themeManager';
+import { ESTIMATE_PRESETS, SPENT_PRESETS } from './utils/constants';
 
 export {};
 
@@ -573,15 +574,32 @@ async function createTicket() {
       });
     }
 
-    // Log time spent
+    // Log time spent via GraphQL (REST /add_spent_time does not support spentAt)
     if (spentDuration) {
-      const spentBody: Record<string, string> = { duration: spentDuration };
-      if (ticketSummary) spentBody.summary = ticketSummary;
-      await fetch(`${baseUrl}/projects/${encodedProject}/issues/${issue.iid}/add_spent_time`, {
+      const graphqlUrl = `${tabInfo!.gitlabUrl}/api/graphql`;
+      const gidQuery = `query { project(fullPath: "${projectPath}") { issue(iid: "${issue.iid}") { id } } }`;
+      const gidRes = await fetch(graphqlUrl, {
         method: 'POST',
-        headers,
-        body: JSON.stringify(spentBody),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+        body: JSON.stringify({ query: gidQuery }),
       });
+      const gidData = await gidRes.json();
+      const issueGid = gidData?.data?.project?.issue?.id;
+      if (issueGid) {
+        const escapedSummary = (ticketSummary || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const mutation = `mutation {
+          timelogCreate(input: {
+            issuableId: "${issueGid}",
+            timeSpent: "${spentDuration}",
+            summary: "${escapedSummary}"
+          }) { errors }
+        }`;
+        await fetch(graphqlUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+          body: JSON.stringify({ query: mutation }),
+        });
+      }
     }
 
     const issueUrl = `${tabInfo.gitlabUrl}/${projectPath}/-/issues/${issue.iid}`;
@@ -1108,19 +1126,38 @@ async function executeTemplateCreation(
     }
 
     if (tpl.timeSpent) {
-      const spentBody: Record<string, string> = { duration: tpl.timeSpent };
-      if (tpl.summary) spentBody.summary = tpl.summary;
-      if (tpl.spentAtTime) {
-        const now = new Date();
-        const [hours, minutes] = tpl.spentAtTime.split(':').map(Number);
-        const spentAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
-        spentBody.spent_at = spentAt.toISOString();
-      }
-      await fetch(`${baseUrl}/projects/${encodedProject}/issues/${issue.iid}/add_spent_time`, {
+      const graphqlUrl = `${tabInfo!.gitlabUrl}/api/graphql`;
+      const gidQuery = `query { project(fullPath: "${tpl.projectPath}") { issue(iid: "${issue.iid}") { id } } }`;
+      const gidRes = await fetch(graphqlUrl, {
         method: 'POST',
-        headers,
-        body: JSON.stringify(spentBody),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+        body: JSON.stringify({ query: gidQuery }),
       });
+      const gidData = await gidRes.json();
+      const issueGid = gidData?.data?.project?.issue?.id;
+      if (issueGid) {
+        let spentAtField = '';
+        if (tpl.spentAtTime) {
+          const now = new Date();
+          const [hours, minutes] = tpl.spentAtTime.split(':').map(Number);
+          const spentAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+          spentAtField = `spentAt: "${spentAt.toISOString()}"`;
+        }
+        const escapedSummary = (tpl.summary || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const mutation = `mutation {
+          timelogCreate(input: {
+            issuableId: "${issueGid}",
+            timeSpent: "${tpl.timeSpent}",
+            ${spentAtField}
+            summary: "${escapedSummary}"
+          }) { errors }
+        }`;
+        await fetch(graphqlUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+          body: JSON.stringify({ query: mutation }),
+        });
+      }
     }
 
     const issueUrl = `${tabInfo!.gitlabUrl}/${tpl.projectPath}/-/issues/${issue.iid}`;
@@ -1408,12 +1445,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.openOptionsPage();
   });
 
-  // Time prefill buttons
+  // Time prefill buttons — populate from shared constants, split into 2 rows
   document.querySelectorAll('.time-prefill-btns').forEach((group) => {
+    const el = group as HTMLElement;
+    const presetType = el.dataset.preset;
+    const presets = presetType === 'spent' ? SPENT_PRESETS : ESTIMATE_PRESETS;
+    const targetId = el.dataset.target;
+
+    const mid = Math.ceil(presets.length / 2);
+    const row1 = presets.slice(0, mid);
+    const row2 = presets.slice(mid);
+    const renderRow = (items: typeof presets) => items.map(
+      (p) => `<button class="time-prefill" data-value="${p.value}">${p.label}</button>`
+    ).join('');
+
+    el.innerHTML = `<div class="time-prefill-row">${renderRow(row1)}</div><div class="time-prefill-row">${renderRow(row2)}</div>`;
+
     group.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('.time-prefill') as HTMLElement | null;
       if (!btn) return;
-      const targetId = (group as HTMLElement).dataset.target;
       if (targetId) {
         ($(targetId) as HTMLInputElement).value = btn.dataset.value || '';
       }

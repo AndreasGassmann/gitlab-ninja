@@ -4,6 +4,7 @@
  */
 
 import { debugLog, debugWarn } from '../utils/debug';
+import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
 
 export class TimeEstimateModalFeature {
   private observer: MutationObserver | null = null;
@@ -85,62 +86,7 @@ export class TimeEstimateModalFeature {
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'gitlab-ninja-quick-estimates';
 
-    const buttons = [
-      { label: '30min', value: '30m' },
-      { label: '1h', value: '1h' },
-      { label: '2h', value: '2h' },
-      { label: '3h', value: '3h' },
-      { label: '4h', value: '4h' },
-      { label: '1d', value: '1d' },
-    ];
-
-    buttonContainer.innerHTML = `
-      <div>
-        <div>
-          ${buttons
-            .map(
-              (btn) => `
-            <button type="button"
-                    class="gitlab-ninja-estimate-quick-btn"
-                    data-value="${btn.value}">
-              ${btn.label}
-            </button>
-          `
-            )
-            .join('')}
-        </div>
-      </div>
-    `;
-
-    // Insert after the input field but before the help text
-    const helpText = formGroup.querySelector('small');
-    if (helpText) {
-      helpText.parentNode?.insertBefore(buttonContainer, helpText);
-    } else {
-      formGroup.appendChild(buttonContainer);
-    }
-
-    // Add click handlers
-    buttonContainer
-      .querySelectorAll<HTMLButtonElement>('.gitlab-ninja-estimate-quick-btn')
-      .forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const value = btn.dataset.value || '';
-          input.value = value;
-
-          // Trigger input event so Vue/React picks up the change
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-
-          // Focus the input
-          input.focus();
-
-          debugLog(`GitLab Ninja: Set time estimate to ${value}`);
-        });
-      });
+    this.buildQuickButtons(buttonContainer, ESTIMATE_PRESETS, input, formGroup, 'estimate');
 
     debugLog('GitLab Ninja: ✅ Added quick estimate buttons to estimate modal');
   }
@@ -173,67 +119,56 @@ export class TimeEstimateModalFeature {
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'gitlab-ninja-quick-estimates';
 
-    const buttons = [
-      { label: '30min', value: '30m' },
-      { label: '1h', value: '1h' },
-      { label: '2h', value: '2h' },
-      { label: '3h', value: '3h' },
-      { label: '4h', value: '4h' },
-      { label: '1d', value: '1d' },
-    ];
-
-    buttonContainer.innerHTML = `
-      <div>
-        <div>
-          ${buttons
-            .map(
-              (btn) => `
-            <button type="button"
-                    class="gitlab-ninja-estimate-quick-btn"
-                    data-value="${btn.value}">
-              ${btn.label}
-            </button>
-          `
-            )
-            .join('')}
-        </div>
-      </div>
-    `;
-
-    // Insert after the input field but before the help text
-    const helpText = formGroup.querySelector('small');
-    if (helpText) {
-      helpText.parentNode?.insertBefore(buttonContainer, helpText);
-    } else {
-      formGroup.appendChild(buttonContainer);
-    }
-
-    // Add click handlers
-    buttonContainer
-      .querySelectorAll<HTMLButtonElement>('.gitlab-ninja-estimate-quick-btn')
-      .forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const value = btn.dataset.value || '';
-          input.value = value;
-
-          // Trigger input event so Vue/React picks up the change
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-
-          // Focus the input
-          input.focus();
-
-          debugLog(`GitLab Ninja: Set time spent to ${value}`);
-        });
-      });
+    this.buildQuickButtons(buttonContainer, SPENT_PRESETS, input, formGroup, 'timelog');
 
     debugLog('GitLab Ninja: ✅ Added quick time buttons to time log modal');
 
     // Also add date shortcut buttons to "Spent at" field
     this.addDateShortcuts(modal);
+  }
+
+  private buildQuickButtons(
+    container: HTMLElement,
+    presets: { label: string; value: string }[],
+    input: HTMLInputElement,
+    formGroup: Element,
+    context: string
+  ): void {
+    const mid = Math.ceil(presets.length / 2);
+    const row1 = presets.slice(0, mid);
+    const row2 = presets.slice(mid);
+    const renderRow = (items: typeof presets) => items.map(
+      (btn) => `<button type="button" class="gitlab-ninja-estimate-quick-btn" data-value="${btn.value}">${btn.label}</button>`
+    ).join('');
+
+    container.innerHTML = `
+      <div>
+        <div>${renderRow(row1)}</div>
+        <div style="margin-top:6px">${renderRow(row2)}</div>
+      </div>
+    `;
+
+    const helpText = formGroup.querySelector('small');
+    if (helpText) {
+      helpText.parentNode?.insertBefore(container, helpText);
+    } else {
+      formGroup.appendChild(container);
+    }
+
+    container
+      .querySelectorAll<HTMLButtonElement>('.gitlab-ninja-estimate-quick-btn')
+      .forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const value = btn.dataset.value || '';
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.focus();
+          debugLog(`GitLab Ninja: Set ${context} to ${value}`);
+        });
+      });
   }
 
   /**

@@ -629,8 +629,8 @@ div.board-card.gn-has-edit-controls {
 
 .gn-preset-btn,
 .gn-date-btn {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 28px;
   padding: 3px 0;
   background: var(--gn-grey-50);
   border: 1px solid var(--gn-grey-300);
@@ -668,6 +668,25 @@ div.board-card.gn-has-edit-controls {
 .gn-preset-btn:disabled {
   opacity: 0.4;
   cursor: wait;
+}
+
+.gn-custom-input {
+  flex: 0 0 auto;
+  width: 50px;
+  padding: 3px 4px;
+  background: var(--gn-grey-50);
+  border: 1px solid var(--gn-grey-300);
+  border-radius: var(--gn-radius);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gn-grey-700);
+  text-align: center;
+  font-family: var(--gn-font-mono);
+  outline: none;
+}
+.gn-custom-input:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2);
 }
 
 .gn-submit-btn {
@@ -908,6 +927,11 @@ div.board-card.gn-has-edit-controls {
     border-color: #6366f1;
     color: #fff;
   }
+  .gn-custom-input {
+    background: #252536;
+    border-color: #414158;
+    color: #c5c5da;
+  }
 
   .gn-submit-btn {
     background: #6366f1;
@@ -1115,6 +1139,11 @@ div.board-card.gn-has-edit-controls {
   color: #6b6b8a;
 }
 
+.gl-dark .gn-custom-input {
+  background: #252536;
+  border-color: #414158;
+  color: #c5c5da;
+}
 .gl-dark .gn-preset-btn,
 .gl-dark .gn-date-btn {
   background: #252536;
@@ -1295,6 +1324,11 @@ div.board-card.gn-has-edit-controls {
   color: #6b6b8a;
 }
 
+.gn-force-dark .gn-custom-input {
+  background: #252536;
+  border-color: #414158;
+  color: #c5c5da;
+}
 .gn-force-dark .gn-preset-btn,
 .gn-force-dark .gn-date-btn {
   background: #252536;
@@ -1474,6 +1508,11 @@ div.board-card.gn-has-edit-controls {
   color: #495057;
 }
 
+.gn-force-light .gn-custom-input {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+  color: #495057;
+}
 .gn-force-light .gn-preset-btn,
 .gn-force-light .gn-date-btn {
   background: #f8f9fa;

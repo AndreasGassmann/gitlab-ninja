@@ -355,8 +355,13 @@
 
       .time-prefill-btns {
         display: flex;
+        flex-direction: column;
         gap: 4px;
         margin-bottom: 14px;
+      }
+      .time-prefill-row {
+        display: flex;
+        gap: 4px;
       }
       .time-prefill {
         padding: 2px 6px;
@@ -1473,12 +1478,7 @@
               placeholder="e.g. 1h"
               style="margin-bottom: 4px"
             />
-            <div class="time-prefill-btns" data-target="ticketEstimate">
-              <button class="time-prefill" data-value="15m">15m</button>
-              <button class="time-prefill" data-value="30m">30m</button>
-              <button class="time-prefill" data-value="45m">45m</button>
-              <button class="time-prefill" data-value="1h">1h</button>
-            </div>
+            <div class="time-prefill-btns" data-target="ticketEstimate" data-preset="estimate"></div>
           </div>
           <div style="flex: 1">
             <label class="field-label" for="ticketSpent">Time Spent</label>
@@ -1489,12 +1489,7 @@
               placeholder="e.g. 30m"
               style="margin-bottom: 4px"
             />
-            <div class="time-prefill-btns" data-target="ticketSpent">
-              <button class="time-prefill" data-value="15m">15m</button>
-              <button class="time-prefill" data-value="30m">30m</button>
-              <button class="time-prefill" data-value="45m">45m</button>
-              <button class="time-prefill" data-value="1h">1h</button>
-            </div>
+            <div class="time-prefill-btns" data-target="ticketSpent" data-preset="spent"></div>
           </div>
         </div>
 
@@ -1556,11 +1551,13 @@
             <div style="display: flex; gap: 12px">
               <div style="flex: 1">
                 <label class="field-label" for="tplEstimate">Estimate</label>
-                <input class="field-input" type="text" id="tplEstimate" placeholder="e.g. 1h" />
+                <input class="field-input" type="text" id="tplEstimate" placeholder="e.g. 1h" style="margin-bottom: 4px" />
+                <div class="time-prefill-btns" data-target="tplEstimate" data-preset="estimate"></div>
               </div>
               <div style="flex: 1">
                 <label class="field-label" for="tplSpent">Time Spent</label>
-                <input class="field-input" type="text" id="tplSpent" placeholder="e.g. 30m" />
+                <input class="field-input" type="text" id="tplSpent" placeholder="e.g. 30m" style="margin-bottom: 4px" />
+                <div class="time-prefill-btns" data-target="tplSpent" data-preset="spent"></div>
               </div>
             </div>
 

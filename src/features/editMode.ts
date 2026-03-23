@@ -17,16 +17,7 @@ import {
 } from '../utils/api';
 import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate, fetchTimelogs, Timelog } from '../utils/gitlabApi';
 import { formatHours } from '../utils/time';
-import { ESTIMATE_PRESETS } from '../utils/constants';
-
-const SPENT_PRESETS = [
-  { label: '15m', value: '15m' },
-  { label: '30m', value: '30m' },
-  { label: '1h', value: '1h' },
-  { label: '2h', value: '2h' },
-  { label: '4h', value: '4h' },
-  { label: '1d', value: '1d' },
-];
+import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
 
 const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -154,7 +145,9 @@ export class EditModeFeature {
   private buildEstimateForm(controls: HTMLElement, card: HTMLElement, iid: string): void {
     let selectedValue: string | null = null;
 
-    const btns = ESTIMATE_PRESETS.map(
+    // Use compact subset for narrow board cards; custom input covers the rest
+    const compactPresets = ESTIMATE_PRESETS.filter((p) => ['15m', '30m', '1h', '2h', '4h', '1d'].includes(p.value));
+    const btns = compactPresets.map(
       (p) =>
         `<button type="button" class="gn-preset-btn" data-value="${p.value}">${p.label}</button>`
     ).join('');
@@ -162,12 +155,13 @@ export class EditModeFeature {
     controls.innerHTML = `
       <div class="gn-edit-row">
         <span class="gn-edit-label">Est:</span>
-        <div class="gn-preset-group">${btns}</div>
+        <div class="gn-preset-group">${btns}<input type="text" class="gn-custom-input" placeholder="custom" /></div>
         <button type="button" class="gn-submit-btn" disabled>Set</button>
       </div>
     `;
 
     const submitBtn = controls.querySelector<HTMLButtonElement>('.gn-submit-btn');
+    const customInput = controls.querySelector<HTMLInputElement>('.gn-custom-input');
     if (!submitBtn) return;
 
     // Preset selection (toggle)
@@ -178,10 +172,33 @@ export class EditModeFeature {
           .querySelectorAll('.gn-preset-btn')
           .forEach((b) => b.classList.remove('gn-selected'));
         btn.classList.add('gn-selected');
+        if (customInput) customInput.value = '';
         selectedValue = btn.dataset.value ?? null;
         submitBtn.disabled = false;
       });
     });
+
+    // Custom input
+    if (customInput) {
+      customInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const val = customInput.value.trim();
+        if (val) {
+          controls.querySelectorAll('.gn-preset-btn').forEach((b) => b.classList.remove('gn-selected'));
+          selectedValue = val;
+          submitBtn.disabled = false;
+        } else {
+          selectedValue = null;
+          submitBtn.disabled = true;
+        }
+      });
+      customInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && selectedValue) {
+          e.preventDefault();
+          submitBtn.click();
+        }
+      });
+    }
 
     // Submit
     submitBtn.addEventListener('click', async (e) => {
@@ -220,7 +237,9 @@ export class EditModeFeature {
     const nowTime = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
     let selectedTime = nowTime;
 
-    const spentBtns = SPENT_PRESETS.map(
+    // Use compact subset for narrow board cards; custom input covers the rest
+    const compactPresets = SPENT_PRESETS.filter((p) => ['15m', '30m', '1h', '2h', '4h'].includes(p.value));
+    const spentBtns = compactPresets.map(
       (p) =>
         `<button type="button" class="gn-preset-btn" data-value="${p.value}">${p.label}</button>`
     ).join('');
@@ -243,7 +262,7 @@ export class EditModeFeature {
       </div>
       <div class="gn-edit-row">
         <span class="gn-edit-label">Log:</span>
-        <div class="gn-preset-group">${spentBtns}</div>
+        <div class="gn-preset-group">${spentBtns}<input type="text" class="gn-custom-input gn-custom-spent" placeholder="custom" /></div>
       </div>
       <div class="gn-edit-row">
         <span class="gn-edit-label">Date:</span>
@@ -259,6 +278,7 @@ export class EditModeFeature {
     `;
 
     const submitBtn = controls.querySelector<HTMLButtonElement>('.gn-submit-btn');
+    const customSpentInput = controls.querySelector<HTMLInputElement>('.gn-custom-spent');
     if (!submitBtn) return;
 
     // Spent preset selection
@@ -269,10 +289,33 @@ export class EditModeFeature {
           .querySelectorAll('.gn-preset-btn')
           .forEach((b) => b.classList.remove('gn-selected'));
         btn.classList.add('gn-selected');
+        if (customSpentInput) customSpentInput.value = '';
         selectedSpent = btn.dataset.value ?? null;
         submitBtn.disabled = false;
       });
     });
+
+    // Custom spent input
+    if (customSpentInput) {
+      customSpentInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const val = customSpentInput.value.trim();
+        if (val) {
+          controls.querySelectorAll('.gn-preset-btn').forEach((b) => b.classList.remove('gn-selected'));
+          selectedSpent = val;
+          submitBtn.disabled = false;
+        } else {
+          selectedSpent = null;
+          submitBtn.disabled = true;
+        }
+      });
+      customSpentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && selectedSpent) {
+          e.preventDefault();
+          submitBtn.click();
+        }
+      });
+    }
 
     // Date & time pickers
     const datePicker = controls.querySelector<HTMLInputElement>('.gn-date-picker');

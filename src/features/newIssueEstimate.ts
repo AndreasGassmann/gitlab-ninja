@@ -55,13 +55,16 @@ export class NewIssueEstimateFeature {
 
     // Strategy 2: Find text inputs in board lists that look like issue creation
     const inputs = document.querySelectorAll<HTMLElement>(
-      '.board-list input[type="text"]:not(.gn-summary-input), ' +
+      '.board-list input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input), ' +
         '.board-list textarea, ' +
-        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input), ' +
+        '[data-testid="board-list"] input[type="text"]:not(.gn-summary-input):not(.gn-custom-input):not(.gn-estimate-custom-input), ' +
         '[data-testid="board-list"] textarea'
     );
 
     inputs.forEach((input) => {
+      // Skip inputs inside edit controls (editMode feature)
+      if (input.closest('.gn-edit-controls')) return;
+
       const wrapper =
         input.closest('form, [class*="new-issue"], [class*="BoardNewIssue"], .board-card-create') ||
         input.parentElement;
@@ -79,7 +82,9 @@ export class NewIssueEstimateFeature {
     const picker = document.createElement('div');
     picker.className = 'gn-estimate-picker';
 
-    const btns = ESTIMATE_PRESETS.map(
+    // Use compact subset for narrow board cards; custom input covers the rest
+    const compactPresets = ESTIMATE_PRESETS.filter((p) => ['15m', '30m', '1h', '2h', '4h', '1d'].includes(p.value));
+    const btns = compactPresets.map(
       (p) =>
         `<button type="button" class="gn-estimate-pick-btn" data-value="${p.value}">${p.label}</button>`
     ).join('');
@@ -91,19 +96,36 @@ export class NewIssueEstimateFeature {
         </svg>
         <span class="gn-estimate-pick-label">Est:</span>
         ${btns}
+        <input type="text" class="gn-estimate-pick-btn gn-estimate-custom-input" placeholder="custom" style="width:45px;text-align:center;outline:none" />
       </div>
     `;
 
+    // Custom input handler
+    const customInput = picker.querySelector<HTMLInputElement>('.gn-estimate-custom-input');
+    if (customInput) {
+      customInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const val = customInput.value.trim();
+        picker.querySelectorAll('.gn-estimate-pick-btn:not(.gn-estimate-custom-input)').forEach((b) => b.classList.remove('gn-selected'));
+        pendingEstimate = val || null;
+      });
+      customInput.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
+
     // Event handlers
-    picker.querySelectorAll<HTMLButtonElement>('.gn-estimate-pick-btn').forEach((btn) => {
+    picker.querySelectorAll<HTMLButtonElement>('.gn-estimate-pick-btn:not(.gn-estimate-custom-input)').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         const wasSelected = btn.classList.contains('gn-selected');
         picker
-          .querySelectorAll('.gn-estimate-pick-btn')
+          .querySelectorAll('.gn-estimate-pick-btn:not(.gn-estimate-custom-input)')
           .forEach((b) => b.classList.remove('gn-selected'));
+        if (customInput) customInput.value = '';
 
         if (wasSelected) {
           pendingEstimate = null;
