@@ -167,6 +167,40 @@ li.board-card.gn-effort-xl {
   background: var(--gn-over);
 }
 
+/* Due-date chip: blue (future) → amber (soon) → red (today/overdue) */
+.gn-due-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--gn-font-mono);
+  letter-spacing: -0.02em;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.gn-due-chip::before {
+  content: '\1F4C5'; /* 📅 */
+  font-size: 10px;
+  line-height: 1;
+}
+.gn-due-chip.gn-due-future {
+  background: rgba(96, 165, 250, 0.14);
+  color: #2563eb;
+}
+.gn-due-chip.gn-due-soon {
+  background: rgba(251, 191, 36, 0.16);
+  color: #b45309;
+}
+.gn-due-chip.gn-due-overdue {
+  background: rgba(248, 113, 113, 0.16);
+  color: #dc2626;
+}
+
 /* ── Column Summary ────────────────────────────────────────────── */
 .gn-col-summary {
   display: flex;

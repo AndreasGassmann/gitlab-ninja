@@ -5,6 +5,7 @@
 export interface TimeInfo {
   spent: number; // in hours
   estimate: number; // in hours
+  dueDate?: string | null; // ISO date string (YYYY-MM-DD) or null
 }
 
 export interface ExtensionConfig {

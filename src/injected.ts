@@ -27,7 +27,10 @@ if ((window as any).__gitlabNinjaInjected) {
   const eventNonce = nonceMeta?.getAttribute('content') || '';
 
   // Setup storage for captured time tracking data
-  const timeTrackingData: Record<string, { spent: number; estimate: number }> = {};
+  const timeTrackingData: Record<
+    string,
+    { spent: number; estimate: number; dueDate?: string | null }
+  > = {};
 
   /**
    * Build a unique cache key from a GraphQL issue node (project-scoped).
@@ -266,6 +269,7 @@ if ((window as any).__gitlabNinjaInjected) {
                   timeTrackingData[cacheKey] = {
                     spent: (issue.totalTimeSpent || 0) / 3600,
                     estimate: (issue.timeEstimate || 0) / 3600,
+                    dueDate: issue.dueDate || null,
                   };
                   count++;
 

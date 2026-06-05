@@ -1140,7 +1140,11 @@ async function executeTemplateCreation(
         if (tpl.spentAtTime) {
           const now = new Date();
           const [hours, minutes] = tpl.spentAtTime.split(':').map(Number);
-          const spentAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+          let spentAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+          // GitLab rejects timelogs in the future. If the template time is later
+          // than now (e.g. an 17:00 template used in the morning), log it at the
+          // current moment instead so the entry still gets created.
+          if (spentAt.getTime() > now.getTime()) spentAt = now;
           spentAtField = `spentAt: "${spentAt.toISOString()}"`;
         }
         const escapedSummary = (tpl.summary || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');

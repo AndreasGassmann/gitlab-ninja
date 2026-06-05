@@ -133,6 +133,7 @@ export async function fetchBoardIssuesManually(): Promise<Map<string, TimeInfo>>
               iid?: string;
               web_url?: string;
               references?: { full?: string };
+              due_date?: string | null;
               time_stats?: { total_time_spent?: number; time_estimate?: number };
             }) => {
               if (issue.iid && issue.time_stats) {
@@ -149,6 +150,7 @@ export async function fetchBoardIssuesManually(): Promise<Map<string, TimeInfo>>
                 const timeInfo: TimeInfo = {
                   spent: (issue.time_stats.total_time_spent || 0) / 3600,
                   estimate: (issue.time_stats.time_estimate || 0) / 3600,
+                  dueDate: issue.due_date || null,
                 };
                 results.set(cacheKey, timeInfo);
                 cacheTimeTracking(cacheKey, timeInfo);

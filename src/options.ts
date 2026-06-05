@@ -230,9 +230,12 @@ async function fetchWeekTimelogs(
 ): Promise<{ entries: WeeklyTimelog[]; timelogs: TimelogDetail[] }> {
   if (!gitlabUrl || !apiToken) return { entries: [], timelogs: [] };
 
-  const query = `query {
+  // Paginate: GitLab caps connections at 100 nodes per page, so a busy month
+  // would otherwise be silently truncated.
+  const buildQuery = (after: string | null) => `query {
     currentUser {
-      timelogs(startDate: "${localDateStr(start)}", endDate: "${localDateStr(end)}") {
+      timelogs(startDate: "${localDateStr(start)}", endDate: "${localDateStr(end)}", first: 100${after ? `, after: "${after}"` : ''}) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           timeSpent
@@ -261,20 +264,32 @@ async function fetchWeekTimelogs(
     }
   }`;
 
-  const res = await fetch(`${gitlabUrl}/api/graphql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiToken}`,
-    },
-    body: JSON.stringify({ query }),
-  });
+  const nodes: any[] = [];
+  let after: string | null = null;
+  do {
+    const res = await fetch(`${gitlabUrl}/api/graphql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiToken}`,
+      },
+      body: JSON.stringify({ query: buildQuery(after) }),
+    });
 
-  if (!res.ok) throw new Error(`API error (${res.status})`);
-  const data = await res.json();
-  if (data.errors?.length) throw new Error(data.errors[0].message);
+    if (!res.ok) throw new Error(`API error (${res.status})`);
+    const data = await res.json();
+    if (data.errors?.length) throw new Error(data.errors[0].message);
 
-  const nodes = data.data?.currentUser?.timelogs?.nodes || [];
+    const conn = data.data?.currentUser?.timelogs;
+    nodes.push(...(conn?.nodes || []));
+    after = conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
+  } while (after);
+
+  // GitLab's startDate/endDate filter is date-only and treats endDate as
+  // inclusive, so logs from the day after the range (e.g. next Monday) leak in.
+  // Clamp to [start, end) by local date so the total only counts in-range logs.
+  const startKey = localDateStr(start);
+  const endKey = localDateStr(end);
 
   const map = new Map<string, WeeklyTimelog>();
   const timelogs: TimelogDetail[] = [];
@@ -284,6 +299,7 @@ async function fetchWeekTimelogs(
     const key = `${node.issue.webUrl}`;
     const fullSpentAt = node.spentAt || new Date().toISOString();
     const spentDateKey = getDateFromSpentAt(fullSpentAt);
+    if (spentDateKey < startKey || spentDateKey >= endKey) continue;
 
     timelogs.push({
       id: node.id,
@@ -1179,6 +1195,8 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
       ${gridLinesHtml}
       ${nowIndicator}
       ${blocksHtml}
+      <div class="cal-overflow cal-overflow-top" title="Entries above the visible area"><span class="cal-overflow-badge"></span></div>
+      <div class="cal-overflow cal-overflow-bottom" title="Entries below the visible area"><span class="cal-overflow-badge"></span></div>
     </div>`;
   });
 
@@ -1215,6 +1233,9 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
     calBody.scrollTop = (8.5 - gridStartHour) * CAL_PX_PER_HOUR;
   }
 
+  // Floating indicators for entries scrolled out of view (above/below)
+  attachOverflowIndicators(content);
+
   // Attach calendar interactions
   attachCalendarInteractions(content, gridStartHour);
 
@@ -1227,6 +1248,52 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
       renderCalendarWeek(days, timelogs, entries);
     });
   }
+}
+
+// Shows a small floating badge at the top/bottom of each day column counting
+// time entries that are scrolled out of the visible window — so entries logged
+// at e.g. 00:00 don't silently get "lost" off-screen.
+function attachOverflowIndicators(content: HTMLElement) {
+  const body = content.querySelector<HTMLElement>('.cal-body');
+  if (!body) return;
+
+  const columns = Array.from(content.querySelectorAll<HTMLElement>('.cal-day-column'));
+
+  const update = () => {
+    const viewTop = body.scrollTop;
+    const viewBottom = viewTop + body.clientHeight;
+
+    for (const col of columns) {
+      const topInd = col.querySelector<HTMLElement>('.cal-overflow-top');
+      const botInd = col.querySelector<HTMLElement>('.cal-overflow-bottom');
+      if (!topInd || !botInd) continue;
+
+      let above = 0;
+      let below = 0;
+      col.querySelectorAll<HTMLElement>('.cal-block').forEach((b) => {
+        const blockTop = b.offsetTop;
+        const blockBottom = blockTop + b.offsetHeight;
+        if (blockBottom <= viewTop + 4) above++;
+        else if (blockTop >= viewBottom - 4) below++;
+      });
+
+      const setInd = (el: HTMLElement, count: number, arrow: string, y: number) => {
+        const badge = el.querySelector('.cal-overflow-badge');
+        if (count > 0) {
+          if (badge) badge.textContent = `${arrow} ${count}`;
+          el.style.top = `${y}px`;
+          el.style.display = 'flex';
+        } else {
+          el.style.display = 'none';
+        }
+      };
+      setInd(topInd, above, '▲', viewTop + 2);
+      setInd(botInd, below, '▼', viewBottom - 22);
+    }
+  };
+
+  body.addEventListener('scroll', update);
+  update();
 }
 
 function renderBreakdownSections(
@@ -1617,7 +1684,7 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
       <div style="flex:1">
         <label class="form-label">Time</label>
         <div style="display:flex;gap:4px;align-items:center">
-          <input class="form-input" type="time" id="popTime" value="${timeStr}" style="max-width:100%;color-scheme:dark">
+          <input class="form-input" type="time" id="popTime" value="${timeStr}" step="900" style="max-width:100%;color-scheme:dark">
           <button type="button" class="timelog-save-btn" id="popNowBtn" style="padding:4px 8px;white-space:nowrap">now</button>
         </div>
       </div>
@@ -1793,7 +1860,7 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
       <div style="flex:1">
         <label class="form-label">Time</label>
         <div style="display:flex;gap:4px;align-items:center">
-          <input class="form-input" type="time" id="popTime" value="${time}" style="max-width:100%;color-scheme:dark">
+          <input class="form-input" type="time" id="popTime" value="${time}" step="900" style="max-width:100%;color-scheme:dark">
           <button type="button" class="timelog-save-btn" id="popNowBtn" style="padding:4px 8px;white-space:nowrap">now</button>
         </div>
       </div>

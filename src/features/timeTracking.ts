@@ -28,7 +28,53 @@ export class TimeTrackingFeature {
       }
       const timeTracking = this.extractTimeTracking(card);
       this.addTimeTrackingDisplay(card, timeTracking);
+      this.addDueDateDisplay(card, timeTracking);
     });
+  }
+
+  /**
+   * Render a relative due-date chip on the card.
+   * Colour goes blue (far future) → amber (soon) → red (today / overdue).
+   */
+  private addDueDateDisplay(card: HTMLElement, timeInfo: TimeInfo): void {
+    const existing = card.querySelector('.gn-due-chip');
+    if (existing) existing.remove();
+
+    const due = timeInfo.dueDate;
+    if (!due) return;
+
+    // Parse YYYY-MM-DD (or ISO) into a local-midnight date
+    const m = due.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return;
+    const dueDate = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffDays = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+
+    let label: string;
+    if (diffDays === 0) label = 'today';
+    else if (diffDays === 1) label = 'tomorrow';
+    else if (diffDays === -1) label = 'yesterday';
+    else if (diffDays > 0) label = `in ${diffDays}d`;
+    else label = `${-diffDays}d ago`;
+
+    // today / past → overdue (red); next 2 days → soon (amber); else future (blue)
+    let tier: 'overdue' | 'soon' | 'future';
+    if (diffDays <= 0) tier = 'overdue';
+    else if (diffDays <= 2) tier = 'soon';
+    else tier = 'future';
+
+    const chip = document.createElement('span');
+    chip.className = `gn-due-chip gn-due-${tier}`;
+    chip.title = `Due ${due}`;
+    chip.textContent = label;
+
+    const footer =
+      card.querySelector<HTMLElement>('.board-card-footer') ||
+      card.querySelector<HTMLElement>('.board-card-info')?.parentElement ||
+      card;
+    footer.appendChild(chip);
   }
 
   private extractTimeTracking(card: HTMLElement): TimeInfo {

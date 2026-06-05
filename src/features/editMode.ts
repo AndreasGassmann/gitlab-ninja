@@ -234,8 +234,25 @@ export class EditModeFeature {
   ): void {
     let selectedSpent: string | null = null;
     let selectedDate = formatDate(new Date());
-    const nowTime = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
+    // Round to the nearest 15 minutes — the time picker only offers quarter-hour slots.
+    const roundToQuarter = (hhmm: string): string => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const total = (h * 60 + Math.round(m / 15) * 15) % (24 * 60);
+      return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    };
+    const nowTime = roundToQuarter(
+      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
+    );
     let selectedTime = nowTime;
+
+    // 15-minute time options for the dropdown (00:00 … 23:45)
+    let timeOptionsHtml = '<option value=""></option>';
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const v = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        timeOptionsHtml += `<option value="${v}"${v === selectedTime ? ' selected' : ''}>${v}</option>`;
+      }
+    }
 
     // Use compact subset for narrow board cards; custom input covers the rest
     const compactPresets = SPENT_PRESETS.filter((p) => ['15m', '30m', '1h', '2h', '4h'].includes(p.value));
@@ -268,7 +285,7 @@ export class EditModeFeature {
         <span class="gn-edit-label">Date:</span>
         <div class="gn-preset-group">${dateBtns}</div>
         <input type="date" class="gn-date-picker" value="${selectedDate}" />
-        <input type="time" class="gn-time-picker" value="${selectedTime}" />
+        <select class="gn-time-picker">${timeOptionsHtml}</select>
       </div>
       <div class="gn-edit-row">
         <span class="gn-edit-label">Note:</span>
@@ -319,7 +336,7 @@ export class EditModeFeature {
 
     // Date & time pickers
     const datePicker = controls.querySelector<HTMLInputElement>('.gn-date-picker');
-    const timePicker = controls.querySelector<HTMLInputElement>('.gn-time-picker');
+    const timePicker = controls.querySelector<HTMLSelectElement>('.gn-time-picker');
     if (!datePicker || !timePicker) return;
 
     // Date preset selection
@@ -332,7 +349,9 @@ export class EditModeFeature {
         datePicker.value = selectedDate;
         if (btn.dataset.setTime === 'true') {
           const now = new Date();
-          selectedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          selectedTime = roundToQuarter(
+            `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+          );
         } else {
           selectedTime = '';
         }
