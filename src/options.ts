@@ -772,6 +772,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
             <span class="timelog-row-actions">
               <button class="timelog-action-btn timelog-duplicate-btn" data-timelog-id="${log.id}" title="Duplicate">Dup</button>
               <button class="timelog-action-btn timelog-split-btn" data-timelog-id="${log.id}" title="Split into two">Split</button>
+              ${log.draftStatus ? `<button class="timelog-action-btn timelog-revert-btn" data-timelog-id="${log.id}" title="Revert this change">Revert</button>` : ''}
             </span>
           </td>
           <td class="date-cell timelog-editable-cell">
@@ -964,6 +965,14 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       const id = (btn as HTMLElement).dataset.timelogId!;
       const log = displayTimelogs.find((t) => t.id === id);
       if (log) await routeSplit(log);
+    });
+  });
+
+  content.querySelectorAll('.timelog-revert-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.timelogId!;
+      routeRevert(id);
     });
   });
 
@@ -1772,6 +1781,7 @@ function showEditPopover(x: number, y: number, log: DisplayTimelog) {
       <button class="timelog-cancel-btn" id="popDelete" style="color:var(--red);border-color:rgba(248,113,113,0.3)">Delete</button>
       <button class="timelog-cancel-btn" id="popDuplicate">Dup</button>
       <button class="timelog-cancel-btn" id="popSplit">Split</button>
+      ${log.draftStatus ? `<button class="timelog-cancel-btn" id="popRevert" style="color:var(--accent);border-color:var(--accent)">Revert</button>` : ''}
       <span style="flex:1"></span>
       <button class="timelog-cancel-btn" id="popCancel">Cancel</button>
       <button class="timelog-save-btn" id="popSave">Save</button>
@@ -1807,6 +1817,11 @@ function showEditPopover(x: number, y: number, log: DisplayTimelog) {
     if (log.timeSpent < 120) return; // min 2 minutes
     closeAllPopovers();
     await routeSplit(log);
+  });
+
+  popover.querySelector('#popRevert')?.addEventListener('click', () => {
+    closeAllPopovers();
+    routeRevert(log.id);
   });
 
   popover.querySelector('#popSave')!.addEventListener('click', async () => {
@@ -2471,6 +2486,15 @@ async function routeDelete(log: DisplayTimelog): Promise<boolean> {
   return ok;
 }
 
+// Drop a single staged draft change, restoring the row to its fetched state
+// (or removing it entirely if it was a newly-added draft). Draft mode only.
+function routeRevert(id: string): void {
+  if (!drafts.isEnabled()) return;
+  if (isDraftId(id)) drafts.deleteAdded(id);
+  else drafts.revertOriginal(id);
+  renderCurrentView();
+}
+
 async function routeDuplicate(log: DisplayTimelog): Promise<boolean> {
   if (drafts.isEnabled()) {
     drafts.addNew(displayToDesired(log));
@@ -2576,6 +2600,35 @@ function openModal(innerHtml: string): {
     if (e.target === overlay) close();
   });
   return { overlay, modal, close };
+}
+
+// Generic yes/no confirmation. Resolves true if the user confirms.
+function confirmAction(opts: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  danger?: boolean;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const confirmStyle = opts.danger ? ' style="background:var(--red);color:#fff"' : '';
+    const { modal, close } = openModal(`
+      <div class="gn-modal-title">${escapeHtml(opts.title)}</div>
+      <div class="gn-modal-body">${escapeHtml(opts.body)}</div>
+      <div class="gn-modal-actions">
+        <button class="timelog-cancel-btn" data-act="cancel">Cancel</button>
+        <button class="timelog-save-btn" data-act="confirm"${confirmStyle}>${escapeHtml(opts.confirmLabel)}</button>
+      </div>
+    `);
+    let done = false;
+    const finish = (val: boolean) => {
+      if (done) return;
+      done = true;
+      close();
+      resolve(val);
+    };
+    modal.querySelector('[data-act="cancel"]')!.addEventListener('click', () => finish(false));
+    modal.querySelector('[data-act="confirm"]')!.addEventListener('click', () => finish(true));
+  });
 }
 
 function confirmToggleOff(): Promise<'commit' | 'discard' | 'cancel'> {
@@ -3256,7 +3309,14 @@ function initWorkSettingsForm(): void {
   const panel = document.querySelector('[data-settings-tab-content="work"]');
   panel?.addEventListener('change', onChange);
 
-  document.getElementById('wsResetBtn')?.addEventListener('click', () => {
+  document.getElementById('wsResetBtn')?.addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset work settings?',
+      body: 'This restores every setting on this tab to its default. Your time logs are not affected.',
+      confirmLabel: 'Reset to defaults',
+      danger: true,
+    });
+    if (!ok) return;
     populateWorkForm({ ...DEFAULT_WORK_SETTINGS });
     saveWorkSettings({ ...DEFAULT_WORK_SETTINGS });
     if (status) {
@@ -3366,8 +3426,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderProjectColors();
   renderColorPreview();
 
-  $('resetColorsBtn').addEventListener('click', () => {
-    if (!confirm('Reset all colors to defaults?')) return;
+  $('resetColorsBtn').addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset all colors?',
+      body: 'This restores every theme, status, and project color to its default.',
+      confirmLabel: 'Reset all',
+      danger: true,
+    });
+    if (!ok) return;
     currentColors = {
       ...DEFAULT_COLORS,
       projectPalette: [...DEFAULT_COLORS.projectPalette],
