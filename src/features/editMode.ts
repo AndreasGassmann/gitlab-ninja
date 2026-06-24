@@ -353,7 +353,9 @@ export class EditModeFeature {
             `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
           );
         } else {
-          selectedTime = '';
+          // Past-day presets have no meaningful "now" time — default to 09:30
+          // so the log lands during work hours instead of at 00:00.
+          selectedTime = '09:30';
         }
         timePicker.value = selectedTime;
       });
