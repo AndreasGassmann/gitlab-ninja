@@ -235,13 +235,14 @@ export class EditModeFeature {
   ): void {
     let selectedSpent: string | null = null;
     let selectedDate = formatDate(new Date());
-    // Round to the nearest 15 minutes — the time picker only offers quarter-hour slots.
-    const roundToQuarter = (hhmm: string): string => {
+    // Round to the nearest time increment so the value matches a dropdown option.
+    const inc = getWorkSettings().timeIncrementMinutes;
+    const roundToIncrement = (hhmm: string): string => {
       const [h, m] = hhmm.split(':').map(Number);
-      const total = (h * 60 + Math.round(m / 15) * 15) % (24 * 60);
+      const total = (h * 60 + Math.round(m / inc) * inc) % (24 * 60);
       return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
     };
-    const nowTime = roundToQuarter(
+    const nowTime = roundToIncrement(
       `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
     );
     let selectedTime = nowTime;
@@ -350,7 +351,7 @@ export class EditModeFeature {
         datePicker.value = selectedDate;
         if (btn.dataset.setTime === 'true') {
           const now = new Date();
-          selectedTime = roundToQuarter(
+          selectedTime = roundToIncrement(
             `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
           );
         } else {

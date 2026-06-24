@@ -110,7 +110,9 @@ function getDateFromSpentAt(spentAt: string): string {
 }
 
 function parseTimeFromISO(iso: string): { hours: number; minutes: number } {
-  const [dh, dm] = getWorkSettings().dayStartTime.split(':').map((n) => parseInt(n, 10));
+  const [dh, dm] = getWorkSettings()
+    .dayStartTime.split(':')
+    .map((n) => parseInt(n, 10));
   if (!iso.includes('T')) return { hours: dh, minutes: dm };
   const timePart = iso.split('T')[1];
   const match = timePart.match(/^(\d{2}):(\d{2})/);
@@ -1322,7 +1324,9 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
   // Scroll so the day-start (minus 30 min for context) is at the top on first render
   const calBody = content.querySelector('.cal-body');
   if (calBody && calBody.scrollTop === 0) {
-    const [sh, sm] = getWorkSettings().dayStartTime.split(':').map((n) => parseInt(n, 10));
+    const [sh, sm] = getWorkSettings()
+      .dayStartTime.split(':')
+      .map((n) => parseInt(n, 10));
     const scrollHour = sh + sm / 60 - 0.5;
     calBody.scrollTop = (scrollHour - gridStartHour) * CAL_PX_PER_HOUR;
   }
@@ -3202,7 +3206,9 @@ function readWorkForm(): WorkSettings {
       (document.getElementById('wsIncrement') as HTMLSelectElement).value,
       10
     ),
-    hoursPerDay: parseFloat((document.getElementById('wsHoursDay') as HTMLInputElement).value || '8'),
+    hoursPerDay: parseFloat(
+      (document.getElementById('wsHoursDay') as HTMLInputElement).value || '8'
+    ),
     hoursPerWeek: parseFloat(
       (document.getElementById('wsHoursWeek') as HTMLInputElement).value || '40'
     ),
