@@ -3,6 +3,7 @@
  */
 
 import { TimeUnit } from '../types';
+import { getWorkSettings } from './workSettings';
 
 /**
  * Parse time string (e.g., "2h", "1d", "30m") to hours
@@ -16,11 +17,12 @@ export function parseTimeToHours(timeStr: string | null | undefined): number {
   const value = parseFloat(match[1]);
   const unit = match[2].toLowerCase() as TimeUnit;
 
+  const { hoursPerDay, hoursPerWeek } = getWorkSettings();
   switch (unit) {
     case 'w':
-      return value * 40; // 1 week = 40 hours
+      return value * hoursPerWeek;
     case 'd':
-      return value * 8; // 1 day = 8 hours
+      return value * hoursPerDay;
     case 'h':
       return value;
     case 'm':
@@ -35,16 +37,17 @@ export function parseTimeToHours(timeStr: string | null | undefined): number {
  */
 export function formatHours(hours: number): string {
   if (hours === 0) return '0h';
+  const { hoursPerDay, hoursPerWeek } = getWorkSettings();
 
-  if (hours >= 40) {
-    const weeks = Math.floor(hours / 40);
-    const remainingHours = hours % 40;
+  if (hours >= hoursPerWeek) {
+    const weeks = Math.floor(hours / hoursPerWeek);
+    const remainingHours = hours % hoursPerWeek;
     return remainingHours > 0 ? `${weeks}w ${remainingHours}h` : `${weeks}w`;
   }
 
-  if (hours >= 8) {
-    const days = Math.floor(hours / 8);
-    const remainingHours = hours % 8;
+  if (hours >= hoursPerDay) {
+    const days = Math.floor(hours / hoursPerDay);
+    const remainingHours = hours % hoursPerDay;
     return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
   }
 
