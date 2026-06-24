@@ -21,6 +21,7 @@ import {
   DraftDesired,
   PlanItem,
 } from './utils/timelogDrafts';
+import { isConnectionError, renderConnectionError } from './utils/connectionError';
 
 interface WeeklyTimelog {
   issueIid: number;
@@ -2215,7 +2216,15 @@ async function loadMonth() {
     $('weekLabelTotal').textContent = formatDuration(monthTotal);
     renderCurrentView();
   } catch (err: any) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    if (isConnectionError(err)) {
+      renderConnectionError(content, {
+        url: gitlabUrl,
+        variant: 'options',
+        onRetry: loadMonth,
+      });
+    } else {
+      content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    }
   }
 }
 
@@ -2690,7 +2699,15 @@ async function loadWeek() {
     $('weekLabelTotal').textContent = formatDuration(weekTotal);
     renderCurrentView();
   } catch (err: any) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    if (isConnectionError(err)) {
+      renderConnectionError(content, {
+        url: gitlabUrl,
+        variant: 'options',
+        onRetry: loadWeek,
+      });
+    } else {
+      content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    }
   }
 }
 

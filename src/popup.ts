@@ -1,5 +1,6 @@
 import { loadThemeMode, ThemeMode } from './utils/themeManager';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from './utils/constants';
+import { isConnectionError, renderConnectionError } from './utils/connectionError';
 
 export {};
 
@@ -507,7 +508,15 @@ async function loadToday(dateStr?: string) {
     const entries = await fetchDayTimelogs(dateStr);
     renderTodayList(entries);
   } catch (err: any) {
-    list.innerHTML = `<div class="today-empty"><div class="today-empty-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    if (isConnectionError(err)) {
+      renderConnectionError(list, {
+        url: tabInfo?.gitlabUrl ?? null,
+        variant: 'popup',
+        onRetry: () => loadToday(dateStr),
+      });
+    } else {
+      list.innerHTML = `<div class="today-empty"><div class="today-empty-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
+    }
     $('todayTotal').textContent = '--';
   } finally {
     refreshBtn.disabled = false;
