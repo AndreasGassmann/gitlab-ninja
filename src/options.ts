@@ -284,10 +284,40 @@ async function fetchWeekTimelogs(
     }
   }`;
 
-  const nodes: any[] = [];
+  interface TimelogNode {
+    id: string;
+    timeSpent: number;
+    spentAt: string | null;
+    summary: string | null;
+    issue: {
+      id: string;
+      iid: string;
+      title: string;
+      webUrl: string;
+      state?: string;
+      timeEstimate?: number;
+      totalTimeSpent?: number;
+      labels?: { nodes?: Array<{ title: string }> };
+    };
+    project?: { id: string; name: string } | null;
+  }
+
+  interface TimelogsGraphQLResponse {
+    errors?: Array<{ message: string }>;
+    data?: {
+      currentUser?: {
+        timelogs?: {
+          pageInfo?: { hasNextPage: boolean; endCursor: string };
+          nodes?: TimelogNode[];
+        };
+      };
+    };
+  }
+
+  const nodes: TimelogNode[] = [];
   let after: string | null = null;
   do {
-    const res = await fetch(`${gitlabUrl}/api/graphql`, {
+    const res: Response = await fetch(`${gitlabUrl}/api/graphql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -297,7 +327,7 @@ async function fetchWeekTimelogs(
     });
 
     if (!res.ok) throw new Error(`API error (${res.status})`);
-    const data = await res.json();
+    const data = (await res.json()) as TimelogsGraphQLResponse;
     if (data.errors?.length) throw new Error(data.errors[0].message);
 
     const conn = data.data?.currentUser?.timelogs;
@@ -327,7 +357,7 @@ async function fetchWeekTimelogs(
       issueState: node.issue.state || 'opened',
       timeEstimate: node.issue.timeEstimate || 0,
       totalTimeSpent: node.issue.totalTimeSpent || 0,
-      labels: (node.issue.labels?.nodes || []).map((l: any) => l.title),
+      labels: (node.issue.labels?.nodes || []).map((l) => l.title),
     }));
 
   return aggregateTimelogs(details, startKey, endKey);

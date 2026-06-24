@@ -207,7 +207,7 @@ class GitLabNinja {
     this.setupMainObserver();
 
     // Periodic refresh (less frequent, mainly to catch API data updates)
-    this.refreshInterval = setInterval(() => {
+    this.refreshInterval = window.setInterval(() => {
       this.enhanceAllFeatures();
     }, 10000); // Every 10 seconds to update when API data arrives
 
