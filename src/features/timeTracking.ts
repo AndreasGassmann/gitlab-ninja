@@ -6,6 +6,7 @@
 import { TimeInfo } from '../types';
 import { parseTimeToHours, formatHours } from '../utils/time';
 import { extractIssueCacheKey, getCachedTimeTracking } from '../utils/api';
+import { getWorkSettings } from '../utils/workSettings';
 
 /** Status states for card color coding */
 type CardStatus = 'unestimated' | 'ready' | 'active' | 'warning' | 'over';
@@ -122,7 +123,8 @@ export class TimeTrackingFeature {
     if (t.estimate === 0) return 'unestimated';
     if (t.spent === 0) return 'ready';
     if (t.spent > t.estimate) return 'over';
-    if (t.spent < t.estimate && t.spent / t.estimate > 0.8) return 'warning';
+    if (t.spent < t.estimate && t.spent / t.estimate > getWorkSettings().warningThreshold)
+      return 'warning';
     return 'active';
   }
 
