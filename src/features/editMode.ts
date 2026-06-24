@@ -18,6 +18,7 @@ import {
 import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate, fetchTimelogs, Timelog } from '../utils/gitlabApi';
 import { formatHours } from '../utils/time';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
+import { getWorkSettings } from '../utils/workSettings';
 
 const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -248,7 +249,7 @@ export class EditModeFeature {
     // 15-minute time options for the dropdown (00:00 … 23:45)
     let timeOptionsHtml = '<option value=""></option>';
     for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 15) {
+      for (let m = 0; m < 60; m += getWorkSettings().timeIncrementMinutes) {
         const v = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         timeOptionsHtml += `<option value="${v}"${v === selectedTime ? ' selected' : ''}>${v}</option>`;
       }

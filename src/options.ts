@@ -1465,7 +1465,7 @@ function renderBreakdownSections(
 // ── Calendar Interactions (drag, resize, click) ──
 
 function attachCalendarInteractions(container: HTMLElement, gridStartHour: number) {
-  const snapPx = CAL_PX_PER_HOUR / 4; // 15-min snap
+  const snapPx = (CAL_PX_PER_HOUR * getWorkSettings().timeIncrementMinutes) / 60;
 
   function snapToGrid(value: number): number {
     return Math.round(value / snapPx) * snapPx;
@@ -1479,8 +1479,9 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
   }
 
   function pxToDurationSeconds(px: number): number {
+    const snap = getWorkSettings().timeIncrementMinutes * 60;
     const raw = Math.round((px / CAL_PX_PER_HOUR) * 3600);
-    return Math.max(900, Math.round(raw / 900) * 900); // min 15min, snap 15min
+    return Math.max(snap, Math.round(raw / snap) * snap); // snap to time increment
   }
 
   let dragState: {
