@@ -492,7 +492,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
     const dateKey = localDateStr(d);
     const todayClass = isToday(d) ? ' today' : '';
     const activeClass = filterDate === dateKey ? ' active' : '';
-    const weekendClass = i >= 5 ? ' weekend' : '';
+    const weekendClass = getWorkSettings().weekendDays.includes(i) ? ' weekend' : '';
     const hrs = dailyTotals[i];
     const zeroClass = hrs === 0 ? ' zero' : '';
     html += `
@@ -1207,8 +1207,9 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
     timeLabelsHtml += `<div class="cal-time-label" style="top:${(h - gridStartHour) * CAL_PX_PER_HOUR}px">${label}</div>`;
   }
 
-  const visibleDays = hideWeekends ? days.slice(0, 5) : days;
-  const dayCols = hideWeekends ? 5 : 7;
+  const weekendDays = getWorkSettings().weekendDays;
+  const visibleDays = hideWeekends ? days.filter((_, i) => !weekendDays.includes(i)) : days;
+  const dayCols = visibleDays.length;
 
   // Day headers & columns
   let dayHeadersHtml = '<div class="cal-time-header"></div>';
@@ -1217,7 +1218,7 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
   visibleDays.forEach((d, i) => {
     const dateKey = localDateStr(d);
     const todayClass = isToday(d) ? ' cal-today' : '';
-    const weekendClass = !hideWeekends && i >= 5 ? ' cal-weekend' : '';
+    const weekendClass = !hideWeekends && weekendDays.includes(i) ? ' cal-weekend' : '';
     const dayLogs = byDate.get(dateKey) || [];
     const dayTotal = dayLogs.reduce(
       (sum, l) => sum + (l.draftStatus === 'deleted' ? 0 : l.timeSpent),
