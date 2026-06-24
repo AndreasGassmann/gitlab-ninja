@@ -22,7 +22,7 @@ import {
   PlanItem,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
-import { initWorkSettings } from './utils/workSettings';
+import { getWorkSettings, initWorkSettings } from './utils/workSettings';
 
 interface WeeklyTimelog {
   issueIid: number;
@@ -103,10 +103,11 @@ function getDateFromSpentAt(spentAt: string): string {
 }
 
 function parseTimeFromISO(iso: string): { hours: number; minutes: number } {
-  if (!iso.includes('T')) return { hours: 9, minutes: 0 };
+  const [dh, dm] = getWorkSettings().dayStartTime.split(':').map((n) => parseInt(n, 10));
+  if (!iso.includes('T')) return { hours: dh, minutes: dm };
   const timePart = iso.split('T')[1];
   const match = timePart.match(/^(\d{2}):(\d{2})/);
-  if (!match) return { hours: 9, minutes: 0 };
+  if (!match) return { hours: dh, minutes: dm };
   return { hours: parseInt(match[1], 10), minutes: parseInt(match[2], 10) };
 }
 
@@ -441,8 +442,10 @@ async function createTimelog(
   note: string
 ): Promise<void> {
   if (!gitlabUrl || !apiToken) throw new Error('Not configured');
-  // Default to 09:00 when no time component is provided
-  const fullSpentAt = spentAt.includes('T') ? spentAt : `${spentAt}T09:00:00`;
+  // Default to day-start time when no time component is provided
+  const fullSpentAt = spentAt.includes('T')
+    ? spentAt
+    : `${spentAt}T${getWorkSettings().dayStartTime}:00`;
   const escapedNote = note.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   const mutation = `mutation {
     timelogCreate(input: {
@@ -1308,10 +1311,12 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
 
   content.innerHTML = html;
 
-  // Scroll to 8:30 by default on initial render
+  // Scroll so the day-start (minus 30 min for context) is at the top on first render
   const calBody = content.querySelector('.cal-body');
   if (calBody && calBody.scrollTop === 0) {
-    calBody.scrollTop = (8.5 - gridStartHour) * CAL_PX_PER_HOUR;
+    const [sh, sm] = getWorkSettings().dayStartTime.split(':').map((n) => parseInt(n, 10));
+    const scrollHour = sh + sm / 60 - 0.5;
+    calBody.scrollTop = (scrollHour - gridStartHour) * CAL_PX_PER_HOUR;
   }
 
   // Floating indicators for entries scrolled out of view (above/below)
