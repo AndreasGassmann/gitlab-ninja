@@ -4,6 +4,7 @@
  */
 
 import { debugLog } from '../utils/debug';
+import { getWorkSettings } from '../utils/workSettings';
 
 export type SettingsChangeCallback = (settings: BoardSettingsState) => void;
 
@@ -12,7 +13,6 @@ export interface BoardSettingsState {
 }
 
 const STORAGE_KEY = 'gitlab-ninja-board-settings';
-const DAILY_TARGET_SECONDS = 30240; // 8h 24m
 
 export class BoardSettingsFeature {
   private container: HTMLElement | null = null;
@@ -147,18 +147,18 @@ export class BoardSettingsFeature {
 
       const h = Math.floor(totalSeconds / 3600);
       const m = Math.floor((totalSeconds % 3600) / 60);
-      const targetH = Math.floor(DAILY_TARGET_SECONDS / 3600);
-      const targetM = Math.floor((DAILY_TARGET_SECONDS % 3600) / 60);
+      const targetH = Math.floor(getWorkSettings().dailyTargetSeconds / 3600);
+      const targetM = Math.floor((getWorkSettings().dailyTargetSeconds % 3600) / 60);
       value.textContent = `${h}h ${m}m / ${targetH}h ${targetM}m`;
 
-      const pct = Math.min((totalSeconds / DAILY_TARGET_SECONDS) * 100, 100);
+      const pct = Math.min((totalSeconds / getWorkSettings().dailyTargetSeconds) * 100, 100);
       fill.style.width = `${pct}%`;
 
       // Color based on progress
       bar.classList.remove('gn-bar-green', 'gn-bar-indigo', 'gn-bar-red');
-      if (totalSeconds > DAILY_TARGET_SECONDS) {
+      if (totalSeconds > getWorkSettings().dailyTargetSeconds) {
         bar.classList.add('gn-bar-red');
-      } else if (totalSeconds >= DAILY_TARGET_SECONDS * 0.95) {
+      } else if (totalSeconds >= getWorkSettings().dailyTargetSeconds * 0.95) {
         bar.classList.add('gn-bar-indigo');
       } else {
         bar.classList.add('gn-bar-green');
