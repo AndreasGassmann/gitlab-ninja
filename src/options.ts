@@ -22,7 +22,14 @@ import {
   PlanItem,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
-import { getWorkSettings, initWorkSettings } from './utils/workSettings';
+import {
+  getWorkSettings,
+  initWorkSettings,
+  loadWorkSettings,
+  saveWorkSettings,
+  DEFAULT_WORK_SETTINGS,
+  WorkSettings,
+} from './utils/workSettings';
 
 interface WeeklyTimelog {
   issueIid: number;
@@ -3175,6 +3182,84 @@ function updateNotifBodyState(enabled: boolean): void {
   body.style.pointerEvents = enabled ? 'auto' : 'none';
 }
 
+const WS_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function readWorkForm(): WorkSettings {
+  const th = parseInt((document.getElementById('wsTargetH') as HTMLInputElement).value || '0', 10);
+  const tm = parseInt((document.getElementById('wsTargetM') as HTMLInputElement).value || '0', 10);
+  const weekendDays: number[] = [];
+  WS_DAY_LABELS.forEach((_, i) => {
+    const cb = document.getElementById(`wsWeekend-${i}`) as HTMLInputElement | null;
+    if (cb?.checked) weekendDays.push(i);
+  });
+  return {
+    dayStartTime: (document.getElementById('wsDayStart') as HTMLInputElement).value || '09:00',
+    dailyTargetSeconds: th * 3600 + tm * 60,
+    warningThreshold:
+      parseInt((document.getElementById('wsWarn') as HTMLInputElement).value || '80', 10) / 100,
+    weekendDays,
+    timeIncrementMinutes: parseInt(
+      (document.getElementById('wsIncrement') as HTMLSelectElement).value,
+      10
+    ),
+    hoursPerDay: parseFloat((document.getElementById('wsHoursDay') as HTMLInputElement).value || '8'),
+    hoursPerWeek: parseFloat(
+      (document.getElementById('wsHoursWeek') as HTMLInputElement).value || '40'
+    ),
+  };
+}
+
+function populateWorkForm(s: WorkSettings): void {
+  (document.getElementById('wsDayStart') as HTMLInputElement).value = s.dayStartTime;
+  (document.getElementById('wsTargetH') as HTMLInputElement).value = String(
+    Math.floor(s.dailyTargetSeconds / 3600)
+  );
+  (document.getElementById('wsTargetM') as HTMLInputElement).value = String(
+    Math.round((s.dailyTargetSeconds % 3600) / 60)
+  );
+  (document.getElementById('wsWarn') as HTMLInputElement).value = String(
+    Math.round(s.warningThreshold * 100)
+  );
+  (document.getElementById('wsIncrement') as HTMLSelectElement).value = String(
+    s.timeIncrementMinutes
+  );
+  (document.getElementById('wsHoursDay') as HTMLInputElement).value = String(s.hoursPerDay);
+  (document.getElementById('wsHoursWeek') as HTMLInputElement).value = String(s.hoursPerWeek);
+
+  const wrap = document.getElementById('wsWeekend')!;
+  wrap.innerHTML = WS_DAY_LABELS.map(
+    (label, i) =>
+      `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="wsWeekend-${i}" ${
+        s.weekendDays.includes(i) ? 'checked' : ''
+      } />${label}</label>`
+  ).join('');
+}
+
+function initWorkSettingsForm(): void {
+  loadWorkSettings().then(populateWorkForm);
+
+  const status = document.getElementById('wsSaveStatus');
+  const onChange = () => {
+    saveWorkSettings(readWorkForm());
+    if (status) {
+      status.textContent = 'Saved';
+      setTimeout(() => (status.textContent = ''), 1500);
+    }
+  };
+
+  const panel = document.querySelector('[data-settings-tab-content="work"]');
+  panel?.addEventListener('change', onChange);
+
+  document.getElementById('wsResetBtn')?.addEventListener('click', () => {
+    populateWorkForm({ ...DEFAULT_WORK_SETTINGS });
+    saveWorkSettings({ ...DEFAULT_WORK_SETTINGS });
+    if (status) {
+      status.textContent = 'Reset';
+      setTimeout(() => (status.textContent = ''), 1500);
+    }
+  });
+}
+
 function initNotificationSettings(): void {
   loadNotificationSettings().then(populateNotificationForm);
 
@@ -3268,6 +3353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   initSettingsTabs();
   initNotificationSettings();
+  initWorkSettingsForm();
   renderThemeModeSelector();
   renderPresetRow();
   renderStatusColorPickers();

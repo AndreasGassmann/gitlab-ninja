@@ -2120,6 +2120,7 @@
           </div>
           <div class="settings-tabs">
             <button class="settings-tab active" data-settings-tab="connection">Connection</button>
+            <button class="settings-tab" data-settings-tab="work">Work</button>
             <button class="settings-tab" data-settings-tab="notifications">Notifications</button>
             <button class="settings-tab" data-settings-tab="appearance">Appearance</button>
             <button class="settings-tab" data-settings-tab="about">About</button>
@@ -2183,6 +2184,54 @@
             <div class="form-row" style="display: flex; align-items: center">
               <button class="btn-primary" id="saveBtn">Save Settings</button>
               <span class="save-status" id="saveStatus"></span>
+            </div>
+          </div>
+
+          <div class="settings-tab-content" data-settings-tab-content="work">
+            <div class="notif-card">
+              <div class="form-group">
+                <label class="form-label" for="wsDayStart">Day start time</label>
+                <input class="form-input" type="time" id="wsDayStart" value="09:00" />
+                <div class="form-hint">Default time for new logs; calendar scrolls here.</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Daily work target</label>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input class="form-input" type="number" id="wsTargetH" min="0" max="24" style="width: 70px" /> h
+                  <input class="form-input" type="number" id="wsTargetM" min="0" max="59" style="width: 70px" /> m
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wsWarn">Estimate warning at (% of estimate spent)</label>
+                <input class="form-input" type="number" id="wsWarn" min="50" max="100" style="width: 80px" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Weekend days</label>
+                <div id="wsWeekend" style="display: flex; gap: 10px; flex-wrap: wrap"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wsIncrement">Time increment</label>
+                <select class="form-input" id="wsIncrement" style="width: 120px">
+                  <option value="5">5 min</option>
+                  <option value="10">10 min</option>
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wsHoursDay">Hours per day</label>
+                <input class="form-input" type="number" id="wsHoursDay" min="1" max="24" step="0.5" style="width: 80px" />
+                <div class="form-hint">Affects how <code>1d</code> estimates display.</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wsHoursWeek">Hours per week</label>
+                <input class="form-input" type="number" id="wsHoursWeek" min="1" max="168" step="0.5" style="width: 80px" />
+                <div class="form-hint">Affects how <code>1w</code> estimates display.</div>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center; margin-top: 8px">
+                <button class="reset-colors-btn" id="wsResetBtn">Reset to Defaults</button>
+                <span class="save-status" id="wsSaveStatus"></span>
+              </div>
             </div>
           </div>
 
