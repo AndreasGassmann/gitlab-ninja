@@ -22,6 +22,14 @@ import {
   PlanItem,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import {
+  getWorkSettings,
+  initWorkSettings,
+  loadWorkSettings,
+  saveWorkSettings,
+  DEFAULT_WORK_SETTINGS,
+  WorkSettings,
+} from './utils/workSettings';
 
 interface WeeklyTimelog {
   issueIid: number;
@@ -102,10 +110,13 @@ function getDateFromSpentAt(spentAt: string): string {
 }
 
 function parseTimeFromISO(iso: string): { hours: number; minutes: number } {
-  if (!iso.includes('T')) return { hours: 9, minutes: 0 };
+  const [dh, dm] = getWorkSettings()
+    .dayStartTime.split(':')
+    .map((n) => parseInt(n, 10));
+  if (!iso.includes('T')) return { hours: dh, minutes: dm };
   const timePart = iso.split('T')[1];
   const match = timePart.match(/^(\d{2}):(\d{2})/);
-  if (!match) return { hours: 9, minutes: 0 };
+  if (!match) return { hours: dh, minutes: dm };
   return { hours: parseInt(match[1], 10), minutes: parseInt(match[2], 10) };
 }
 
@@ -284,10 +295,40 @@ async function fetchWeekTimelogs(
     }
   }`;
 
-  const nodes: any[] = [];
+  interface TimelogNode {
+    id: string;
+    timeSpent: number;
+    spentAt: string | null;
+    summary: string | null;
+    issue: {
+      id: string;
+      iid: string;
+      title: string;
+      webUrl: string;
+      state?: string;
+      timeEstimate?: number;
+      totalTimeSpent?: number;
+      labels?: { nodes?: Array<{ title: string }> };
+    };
+    project?: { id: string; name: string } | null;
+  }
+
+  interface TimelogsGraphQLResponse {
+    errors?: Array<{ message: string }>;
+    data?: {
+      currentUser?: {
+        timelogs?: {
+          pageInfo?: { hasNextPage: boolean; endCursor: string };
+          nodes?: TimelogNode[];
+        };
+      };
+    };
+  }
+
+  const nodes: TimelogNode[] = [];
   let after: string | null = null;
   do {
-    const res = await fetch(`${gitlabUrl}/api/graphql`, {
+    const res: Response = await fetch(`${gitlabUrl}/api/graphql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -297,7 +338,7 @@ async function fetchWeekTimelogs(
     });
 
     if (!res.ok) throw new Error(`API error (${res.status})`);
-    const data = await res.json();
+    const data = (await res.json()) as TimelogsGraphQLResponse;
     if (data.errors?.length) throw new Error(data.errors[0].message);
 
     const conn = data.data?.currentUser?.timelogs;
@@ -327,7 +368,7 @@ async function fetchWeekTimelogs(
       issueState: node.issue.state || 'opened',
       timeEstimate: node.issue.timeEstimate || 0,
       totalTimeSpent: node.issue.totalTimeSpent || 0,
-      labels: (node.issue.labels?.nodes || []).map((l: any) => l.title),
+      labels: (node.issue.labels?.nodes || []).map((l) => l.title),
     }));
 
   return aggregateTimelogs(details, startKey, endKey);
@@ -410,8 +451,10 @@ async function createTimelog(
   note: string
 ): Promise<void> {
   if (!gitlabUrl || !apiToken) throw new Error('Not configured');
-  // Default to 09:00 when no time component is provided
-  const fullSpentAt = spentAt.includes('T') ? spentAt : `${spentAt}T09:00:00`;
+  // Default to day-start time when no time component is provided
+  const fullSpentAt = spentAt.includes('T')
+    ? spentAt
+    : `${spentAt}T${getWorkSettings().dayStartTime}:00`;
   const escapedNote = note.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   const mutation = `mutation {
     timelogCreate(input: {
@@ -458,7 +501,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
     const dateKey = localDateStr(d);
     const todayClass = isToday(d) ? ' today' : '';
     const activeClass = filterDate === dateKey ? ' active' : '';
-    const weekendClass = i >= 5 ? ' weekend' : '';
+    const weekendClass = getWorkSettings().weekendDays.includes(i) ? ' weekend' : '';
     const hrs = dailyTotals[i];
     const zeroClass = hrs === 0 ? ' zero' : '';
     html += `
@@ -729,6 +772,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
             <span class="timelog-row-actions">
               <button class="timelog-action-btn timelog-duplicate-btn" data-timelog-id="${log.id}" title="Duplicate">Dup</button>
               <button class="timelog-action-btn timelog-split-btn" data-timelog-id="${log.id}" title="Split into two">Split</button>
+              ${log.draftStatus ? `<button class="timelog-action-btn timelog-revert-btn" data-timelog-id="${log.id}" title="Revert this change">Revert</button>` : ''}
             </span>
           </td>
           <td class="date-cell timelog-editable-cell">
@@ -921,6 +965,14 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       const id = (btn as HTMLElement).dataset.timelogId!;
       const log = displayTimelogs.find((t) => t.id === id);
       if (log) await routeSplit(log);
+    });
+  });
+
+  content.querySelectorAll('.timelog-revert-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.timelogId!;
+      routeRevert(id);
     });
   });
 
@@ -1173,8 +1225,9 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
     timeLabelsHtml += `<div class="cal-time-label" style="top:${(h - gridStartHour) * CAL_PX_PER_HOUR}px">${label}</div>`;
   }
 
-  const visibleDays = hideWeekends ? days.slice(0, 5) : days;
-  const dayCols = hideWeekends ? 5 : 7;
+  const weekendDays = getWorkSettings().weekendDays;
+  const visibleDays = hideWeekends ? days.filter((_, i) => !weekendDays.includes(i)) : days;
+  const dayCols = visibleDays.length;
 
   // Day headers & columns
   let dayHeadersHtml = '<div class="cal-time-header"></div>';
@@ -1183,7 +1236,7 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
   visibleDays.forEach((d, i) => {
     const dateKey = localDateStr(d);
     const todayClass = isToday(d) ? ' cal-today' : '';
-    const weekendClass = !hideWeekends && i >= 5 ? ' cal-weekend' : '';
+    const weekendClass = !hideWeekends && weekendDays.includes(i) ? ' cal-weekend' : '';
     const dayLogs = byDate.get(dateKey) || [];
     const dayTotal = dayLogs.reduce(
       (sum, l) => sum + (l.draftStatus === 'deleted' ? 0 : l.timeSpent),
@@ -1277,10 +1330,14 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
 
   content.innerHTML = html;
 
-  // Scroll to 8:30 by default on initial render
+  // Scroll so the day-start (minus 30 min for context) is at the top on first render
   const calBody = content.querySelector('.cal-body');
   if (calBody && calBody.scrollTop === 0) {
-    calBody.scrollTop = (8.5 - gridStartHour) * CAL_PX_PER_HOUR;
+    const [sh, sm] = getWorkSettings()
+      .dayStartTime.split(':')
+      .map((n) => parseInt(n, 10));
+    const scrollHour = sh + sm / 60 - 0.5;
+    calBody.scrollTop = (scrollHour - gridStartHour) * CAL_PX_PER_HOUR;
   }
 
   // Floating indicators for entries scrolled out of view (above/below)
@@ -1428,7 +1485,7 @@ function renderBreakdownSections(
 // ── Calendar Interactions (drag, resize, click) ──
 
 function attachCalendarInteractions(container: HTMLElement, gridStartHour: number) {
-  const snapPx = CAL_PX_PER_HOUR / 4; // 15-min snap
+  const snapPx = (CAL_PX_PER_HOUR * getWorkSettings().timeIncrementMinutes) / 60;
 
   function snapToGrid(value: number): number {
     return Math.round(value / snapPx) * snapPx;
@@ -1442,8 +1499,9 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
   }
 
   function pxToDurationSeconds(px: number): number {
+    const snap = getWorkSettings().timeIncrementMinutes * 60;
     const raw = Math.round((px / CAL_PX_PER_HOUR) * 3600);
-    return Math.max(900, Math.round(raw / 900) * 900); // min 15min, snap 15min
+    return Math.max(snap, Math.round(raw / snap) * snap); // snap to time increment
   }
 
   let dragState: {
@@ -1723,6 +1781,7 @@ function showEditPopover(x: number, y: number, log: DisplayTimelog) {
       <button class="timelog-cancel-btn" id="popDelete" style="color:var(--red);border-color:rgba(248,113,113,0.3)">Delete</button>
       <button class="timelog-cancel-btn" id="popDuplicate">Dup</button>
       <button class="timelog-cancel-btn" id="popSplit">Split</button>
+      ${log.draftStatus ? `<button class="timelog-cancel-btn" id="popRevert" style="color:var(--accent);border-color:var(--accent)">Revert</button>` : ''}
       <span style="flex:1"></span>
       <button class="timelog-cancel-btn" id="popCancel">Cancel</button>
       <button class="timelog-save-btn" id="popSave">Save</button>
@@ -1758,6 +1817,11 @@ function showEditPopover(x: number, y: number, log: DisplayTimelog) {
     if (log.timeSpent < 120) return; // min 2 minutes
     closeAllPopovers();
     await routeSplit(log);
+  });
+
+  popover.querySelector('#popRevert')?.addEventListener('click', () => {
+    closeAllPopovers();
+    routeRevert(log.id);
   });
 
   popover.querySelector('#popSave')!.addEventListener('click', async () => {
@@ -2422,6 +2486,15 @@ async function routeDelete(log: DisplayTimelog): Promise<boolean> {
   return ok;
 }
 
+// Drop a single staged draft change, restoring the row to its fetched state
+// (or removing it entirely if it was a newly-added draft). Draft mode only.
+function routeRevert(id: string): void {
+  if (!drafts.isEnabled()) return;
+  if (isDraftId(id)) drafts.deleteAdded(id);
+  else drafts.revertOriginal(id);
+  renderCurrentView();
+}
+
 async function routeDuplicate(log: DisplayTimelog): Promise<boolean> {
   if (drafts.isEnabled()) {
     drafts.addNew(displayToDesired(log));
@@ -2527,6 +2600,35 @@ function openModal(innerHtml: string): {
     if (e.target === overlay) close();
   });
   return { overlay, modal, close };
+}
+
+// Generic yes/no confirmation. Resolves true if the user confirms.
+function confirmAction(opts: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  danger?: boolean;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const confirmStyle = opts.danger ? ' style="background:var(--red);color:#fff"' : '';
+    const { modal, close } = openModal(`
+      <div class="gn-modal-title">${escapeHtml(opts.title)}</div>
+      <div class="gn-modal-body">${escapeHtml(opts.body)}</div>
+      <div class="gn-modal-actions">
+        <button class="timelog-cancel-btn" data-act="cancel">Cancel</button>
+        <button class="timelog-save-btn" data-act="confirm"${confirmStyle}>${escapeHtml(opts.confirmLabel)}</button>
+      </div>
+    `);
+    let done = false;
+    const finish = (val: boolean) => {
+      if (done) return;
+      done = true;
+      close();
+      resolve(val);
+    };
+    modal.querySelector('[data-act="cancel"]')!.addEventListener('click', () => finish(false));
+    modal.querySelector('[data-act="confirm"]')!.addEventListener('click', () => finish(true));
+  });
 }
 
 function confirmToggleOff(): Promise<'commit' | 'discard' | 'cancel'> {
@@ -3046,18 +3148,44 @@ interface NotificationSettings {
   enabled: boolean;
   startOfDay: { enabled: boolean; time: string; minHours: number };
   endOfDay: { enabled: boolean; time: string; minHours: number };
+  nagging: {
+    enabled: boolean;
+    startTime: string;
+    endTime: string;
+    intervalHours: number;
+    targetHours: number;
+  };
 }
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: false,
   startOfDay: { enabled: true, time: '08:45', minHours: 8 },
   endOfDay: { enabled: true, time: '17:00', minHours: 8 },
+  nagging: {
+    enabled: false,
+    startTime: '10:00',
+    endTime: '16:00',
+    intervalHours: 2,
+    targetHours: 8,
+  },
 };
 
 async function loadNotificationSettings(): Promise<NotificationSettings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get('notificationSettings', (result) => {
-      resolve(result.notificationSettings || DEFAULT_NOTIFICATION_SETTINGS);
+      const stored = result.notificationSettings;
+      if (!stored) {
+        resolve(DEFAULT_NOTIFICATION_SETTINGS);
+        return;
+      }
+      // Merge defaults so settings saved before a field existed (e.g. nagging) stay valid.
+      resolve({
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...stored,
+        startOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.startOfDay, ...stored.startOfDay },
+        endOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.endOfDay, ...stored.endOfDay },
+        nagging: { ...DEFAULT_NOTIFICATION_SETTINGS.nagging, ...stored.nagging },
+      });
     });
   });
 }
@@ -3079,6 +3207,13 @@ function readNotificationForm(): NotificationSettings {
       time: ($('notifEndTime') as HTMLInputElement).value || '17:00',
       minHours: parseFloat(($('notifEndHours') as HTMLInputElement).value) || 8,
     },
+    nagging: {
+      enabled: ($('notifNagEnabled') as HTMLInputElement).checked,
+      startTime: ($('notifNagStart') as HTMLInputElement).value || '10:00',
+      endTime: ($('notifNagEnd') as HTMLInputElement).value || '16:00',
+      intervalHours: parseFloat(($('notifNagInterval') as HTMLInputElement).value) || 2,
+      targetHours: parseFloat(($('notifNagTarget') as HTMLInputElement).value) || 8,
+    },
   };
 }
 
@@ -3090,6 +3225,11 @@ function populateNotificationForm(settings: NotificationSettings): void {
   ($('notifEndEnabled') as HTMLInputElement).checked = settings.endOfDay.enabled;
   ($('notifEndTime') as HTMLInputElement).value = settings.endOfDay.time;
   ($('notifEndHours') as HTMLInputElement).value = String(settings.endOfDay.minHours);
+  ($('notifNagEnabled') as HTMLInputElement).checked = settings.nagging.enabled;
+  ($('notifNagStart') as HTMLInputElement).value = settings.nagging.startTime;
+  ($('notifNagEnd') as HTMLInputElement).value = settings.nagging.endTime;
+  ($('notifNagInterval') as HTMLInputElement).value = String(settings.nagging.intervalHours);
+  ($('notifNagTarget') as HTMLInputElement).value = String(settings.nagging.targetHours);
   updateNotifBodyState(settings.enabled);
 }
 
@@ -3097,6 +3237,93 @@ function updateNotifBodyState(enabled: boolean): void {
   const body = $('notifSettingsBody');
   body.style.opacity = enabled ? '1' : '0.45';
   body.style.pointerEvents = enabled ? 'auto' : 'none';
+}
+
+const WS_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function readWorkForm(): WorkSettings {
+  const th = parseInt((document.getElementById('wsTargetH') as HTMLInputElement).value || '0', 10);
+  const tm = parseInt((document.getElementById('wsTargetM') as HTMLInputElement).value || '0', 10);
+  const weekendDays: number[] = [];
+  WS_DAY_LABELS.forEach((_, i) => {
+    const cb = document.getElementById(`wsWeekend-${i}`) as HTMLInputElement | null;
+    if (cb?.checked) weekendDays.push(i);
+  });
+  return {
+    dayStartTime: (document.getElementById('wsDayStart') as HTMLInputElement).value || '09:00',
+    dailyTargetSeconds: th * 3600 + tm * 60,
+    warningThreshold:
+      parseInt((document.getElementById('wsWarn') as HTMLInputElement).value || '80', 10) / 100,
+    weekendDays,
+    timeIncrementMinutes: parseInt(
+      (document.getElementById('wsIncrement') as HTMLSelectElement).value,
+      10
+    ),
+    hoursPerDay: parseFloat(
+      (document.getElementById('wsHoursDay') as HTMLInputElement).value || '8'
+    ),
+    hoursPerWeek: parseFloat(
+      (document.getElementById('wsHoursWeek') as HTMLInputElement).value || '40'
+    ),
+  };
+}
+
+function populateWorkForm(s: WorkSettings): void {
+  (document.getElementById('wsDayStart') as HTMLInputElement).value = s.dayStartTime;
+  (document.getElementById('wsTargetH') as HTMLInputElement).value = String(
+    Math.floor(s.dailyTargetSeconds / 3600)
+  );
+  (document.getElementById('wsTargetM') as HTMLInputElement).value = String(
+    Math.round((s.dailyTargetSeconds % 3600) / 60)
+  );
+  (document.getElementById('wsWarn') as HTMLInputElement).value = String(
+    Math.round(s.warningThreshold * 100)
+  );
+  (document.getElementById('wsIncrement') as HTMLSelectElement).value = String(
+    s.timeIncrementMinutes
+  );
+  (document.getElementById('wsHoursDay') as HTMLInputElement).value = String(s.hoursPerDay);
+  (document.getElementById('wsHoursWeek') as HTMLInputElement).value = String(s.hoursPerWeek);
+
+  const wrap = document.getElementById('wsWeekend')!;
+  wrap.innerHTML = WS_DAY_LABELS.map(
+    (label, i) =>
+      `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="wsWeekend-${i}" ${
+        s.weekendDays.includes(i) ? 'checked' : ''
+      } />${label}</label>`
+  ).join('');
+}
+
+function initWorkSettingsForm(): void {
+  loadWorkSettings().then(populateWorkForm);
+
+  const status = document.getElementById('wsSaveStatus');
+  const onChange = () => {
+    saveWorkSettings(readWorkForm());
+    if (status) {
+      status.textContent = 'Saved';
+      setTimeout(() => (status.textContent = ''), 1500);
+    }
+  };
+
+  const panel = document.querySelector('[data-settings-tab-content="work"]');
+  panel?.addEventListener('change', onChange);
+
+  document.getElementById('wsResetBtn')?.addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset work settings?',
+      body: 'This restores every setting on this tab to its default. Your time logs are not affected.',
+      confirmLabel: 'Reset to defaults',
+      danger: true,
+    });
+    if (!ok) return;
+    populateWorkForm({ ...DEFAULT_WORK_SETTINGS });
+    saveWorkSettings({ ...DEFAULT_WORK_SETTINGS });
+    if (status) {
+      status.textContent = 'Reset';
+      setTimeout(() => (status.textContent = ''), 1500);
+    }
+  });
 }
 
 function initNotificationSettings(): void {
@@ -3116,6 +3343,11 @@ function initNotificationSettings(): void {
     'notifEndEnabled',
     'notifEndTime',
     'notifEndHours',
+    'notifNagEnabled',
+    'notifNagStart',
+    'notifNagEnd',
+    'notifNagInterval',
+    'notifNagTarget',
   ]) {
     $(id).addEventListener('change', () => {
       saveNotificationSettings(readNotificationForm());
@@ -3160,6 +3392,7 @@ function flashSaveStatus(text: string, ok: boolean) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initWorkSettings();
   await loadSettings();
   await detectGitlabUrl();
 
@@ -3186,14 +3419,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   initSettingsTabs();
   initNotificationSettings();
+  initWorkSettingsForm();
   renderThemeModeSelector();
   renderPresetRow();
   renderStatusColorPickers();
   renderProjectColors();
   renderColorPreview();
 
-  $('resetColorsBtn').addEventListener('click', () => {
-    if (!confirm('Reset all colors to defaults?')) return;
+  $('resetColorsBtn').addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset all colors?',
+      body: 'This restores every theme, status, and project color to its default.',
+      confirmLabel: 'Reset all',
+      danger: true,
+    });
+    if (!ok) return;
     currentColors = {
       ...DEFAULT_COLORS,
       projectPalette: [...DEFAULT_COLORS.projectPalette],

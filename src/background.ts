@@ -3,6 +3,8 @@
  * Handles scheduled notifications for time tracking reminders.
  */
 
+import { initWorkSettings } from './utils/workSettings';
+
 interface NotificationSettings {
   enabled: boolean;
   startOfDay: {
@@ -14,6 +16,13 @@ interface NotificationSettings {
     enabled: boolean;
     time: string; // "HH:MM"
     minHours: number; // threshold for current day
+  };
+  nagging: {
+    enabled: boolean;
+    startTime: string; // "HH:MM" - window start
+    endTime: string; // "HH:MM" - window end
+    intervalHours: number; // how often to nag within the window
+    targetHours: number; // full-day target used for pro-rating
   };
 }
 
@@ -29,10 +38,18 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     time: '17:00',
     minHours: 8,
   },
+  nagging: {
+    enabled: false,
+    startTime: '10:00',
+    endTime: '16:00',
+    intervalHours: 2,
+    targetHours: 8,
+  },
 };
 
 const ALARM_START_OF_DAY = 'gitlab-ninja-start-of-day';
 const ALARM_END_OF_DAY = 'gitlab-ninja-end-of-day';
+const ALARM_NAGGING = 'gitlab-ninja-nagging';
 
 function localDateStr(d: Date): string {
   const y = d.getFullYear();
@@ -44,7 +61,19 @@ function localDateStr(d: Date): string {
 async function getNotificationSettings(): Promise<NotificationSettings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get('notificationSettings', (result) => {
-      resolve(result.notificationSettings || DEFAULT_NOTIFICATION_SETTINGS);
+      const stored = result.notificationSettings;
+      if (!stored) {
+        resolve(DEFAULT_NOTIFICATION_SETTINGS);
+        return;
+      }
+      // Merge defaults so settings saved before a field existed (e.g. nagging) stay valid.
+      resolve({
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...stored,
+        startOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.startOfDay, ...stored.startOfDay },
+        endOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.endOfDay, ...stored.endOfDay },
+        nagging: { ...DEFAULT_NOTIFICATION_SETTINGS.nagging, ...stored.nagging },
+      });
     });
   });
 }
@@ -129,6 +158,11 @@ function getPreviousWorkday(date: Date): Date {
   return prev;
 }
 
+function timeStrToMinutes(timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
 function getNextAlarmTime(timeStr: string): Date {
   const [hours, minutes] = timeStr.split(':').map(Number);
   const now = new Date();
@@ -146,6 +180,7 @@ async function scheduleAlarms(): Promise<void> {
   // Clear existing alarms
   await chrome.alarms.clear(ALARM_START_OF_DAY);
   await chrome.alarms.clear(ALARM_END_OF_DAY);
+  await chrome.alarms.clear(ALARM_NAGGING);
 
   const settings = await getNotificationSettings();
   if (!settings.enabled) return;
@@ -165,9 +200,44 @@ async function scheduleAlarms(): Promise<void> {
       periodInMinutes: 24 * 60, // repeat daily
     });
   }
+
+  if (settings.nagging.enabled) {
+    // Repeat on the interval; fires outside the window are filtered in handleNaggingAlarm.
+    const interval = Math.max(0.25, settings.nagging.intervalHours);
+    const nextTime = getNextNagTime(settings.nagging.startTime, settings.nagging.endTime, interval);
+    chrome.alarms.create(ALARM_NAGGING, {
+      when: nextTime.getTime(),
+      periodInMinutes: interval * 60,
+    });
+  }
+}
+
+// Soonest interval-aligned slot inside today's window, else the window start tomorrow.
+function getNextNagTime(startTime: string, endTime: string, intervalHours: number): Date {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const startMin = timeStrToMinutes(startTime);
+  const endMin = timeStrToMinutes(endTime);
+  const intervalMin = intervalHours * 60;
+
+  const at = (minutes: number, dayOffset: number): Date => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    d.setDate(d.getDate() + dayOffset);
+    d.setMinutes(minutes);
+    return d;
+  };
+
+  if (nowMin < startMin) return at(startMin, 0);
+  if (nowMin <= endMin) {
+    const slotsElapsed = Math.ceil((nowMin - startMin) / intervalMin);
+    const nextSlot = startMin + slotsElapsed * intervalMin;
+    if (nextSlot <= endMin) return at(nextSlot, 0);
+  }
+  return at(startMin, 1);
 }
 
 async function handleStartOfDayAlarm(): Promise<void> {
+  await initWorkSettings();
   const now = new Date();
   // Only fire on weekdays
   if (!isWeekday(now)) return;
@@ -195,6 +265,7 @@ async function handleStartOfDayAlarm(): Promise<void> {
 }
 
 async function handleEndOfDayAlarm(): Promise<void> {
+  await initWorkSettings();
   const now = new Date();
   // Only fire on weekdays
   if (!isWeekday(now)) return;
@@ -219,12 +290,50 @@ async function handleEndOfDayAlarm(): Promise<void> {
   }
 }
 
+async function handleNaggingAlarm(): Promise<void> {
+  await initWorkSettings();
+  const now = new Date();
+  // Only fire on weekdays
+  if (!isWeekday(now)) return;
+
+  const settings = await getNotificationSettings();
+  if (!settings.enabled || !settings.nagging.enabled) return;
+
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const startMin = timeStrToMinutes(settings.nagging.startTime);
+  const endMin = timeStrToMinutes(settings.nagging.endTime);
+  // Outside today's window — alarm interval doesn't align to the window, so skip.
+  if (nowMin < startMin || nowMin > endMin) return;
+
+  const totalSeconds = await fetchDayTimeSpent(now);
+
+  // Pro-rate the daily target by how far we are through the window.
+  const span = Math.max(1, endMin - startMin);
+  const fraction = Math.min(1, Math.max(0, (nowMin - startMin) / span));
+  const expectedSeconds = settings.nagging.targetHours * 3600 * fraction;
+
+  if (totalSeconds < expectedSeconds) {
+    const logged = formatHours(totalSeconds);
+    const expected = formatHours(expectedSeconds);
+
+    chrome.notifications.create(`nagging-${Date.now()}`, {
+      type: 'basic',
+      iconUrl: 'icons/icon-128.png',
+      title: 'GitLab Ninja - Time Log Reminder',
+      message: `You've logged ${logged} so far — about ${expected} expected by now. Keep logging your time!`,
+      priority: 1,
+    });
+  }
+}
+
 // Listen for alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_START_OF_DAY) {
     handleStartOfDayAlarm();
   } else if (alarm.name === ALARM_END_OF_DAY) {
     handleEndOfDayAlarm();
+  } else if (alarm.name === ALARM_NAGGING) {
+    handleNaggingAlarm();
   }
 });
 
@@ -236,7 +345,10 @@ const DYNAMIC_INJECTED_SCRIPT_ID = 'gitlab-ninja-custom-domain-injected';
 // Serialize calls to avoid duplicate registration races
 let registerPromise: Promise<void> = Promise.resolve();
 function registerCustomDomainScript(): Promise<void> {
-  registerPromise = registerPromise.then(registerCustomDomainScriptImpl, registerCustomDomainScriptImpl);
+  registerPromise = registerPromise.then(
+    registerCustomDomainScriptImpl,
+    registerCustomDomainScriptImpl
+  );
   return registerPromise;
 }
 

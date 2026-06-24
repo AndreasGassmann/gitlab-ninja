@@ -261,6 +261,13 @@ export class DraftManager {
     this.persist();
   }
 
+  /** Drop a single staged change against an original, restoring it to its
+   * fetched state (works for both 'modified' and 'deleted' drafts). */
+  revertOriginal(originId: string): void {
+    delete this.state.byOrigin[originId];
+    this.persist();
+  }
+
   discardAll(): void {
     this.state.byOrigin = {};
     this.state.added = [];

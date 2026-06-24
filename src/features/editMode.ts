@@ -18,6 +18,7 @@ import {
 import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate, fetchTimelogs, Timelog } from '../utils/gitlabApi';
 import { formatHours } from '../utils/time';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
+import { getWorkSettings } from '../utils/workSettings';
 
 const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -234,21 +235,22 @@ export class EditModeFeature {
   ): void {
     let selectedSpent: string | null = null;
     let selectedDate = formatDate(new Date());
-    // Round to the nearest 15 minutes — the time picker only offers quarter-hour slots.
-    const roundToQuarter = (hhmm: string): string => {
+    // Round to the nearest time increment so the value matches a dropdown option.
+    const inc = getWorkSettings().timeIncrementMinutes;
+    const roundToIncrement = (hhmm: string): string => {
       const [h, m] = hhmm.split(':').map(Number);
-      const total = (h * 60 + Math.round(m / 15) * 15) % (24 * 60);
+      const total = (h * 60 + Math.round(m / inc) * inc) % (24 * 60);
       return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
     };
-    const nowTime = roundToQuarter(
+    const nowTime = roundToIncrement(
       `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
     );
     let selectedTime = nowTime;
 
-    // 15-minute time options for the dropdown (00:00 … 23:45)
+    // Time options for the dropdown, stepped by the configured time increment
     let timeOptionsHtml = '<option value=""></option>';
     for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 15) {
+      for (let m = 0; m < 60; m += getWorkSettings().timeIncrementMinutes) {
         const v = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         timeOptionsHtml += `<option value="${v}"${v === selectedTime ? ' selected' : ''}>${v}</option>`;
       }
@@ -349,11 +351,13 @@ export class EditModeFeature {
         datePicker.value = selectedDate;
         if (btn.dataset.setTime === 'true') {
           const now = new Date();
-          selectedTime = roundToQuarter(
+          selectedTime = roundToIncrement(
             `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
           );
         } else {
-          selectedTime = '';
+          // Past-day presets have no meaningful "now" time — default to 09:30
+          // so the log lands during work hours instead of at 00:00.
+          selectedTime = '09:30';
         }
         timePicker.value = selectedTime;
       });

@@ -1,6 +1,7 @@
 import { loadThemeMode, ThemeMode } from './utils/themeManager';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from './utils/constants';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import { initWorkSettings } from './utils/workSettings';
 
 export {};
 
@@ -276,7 +277,6 @@ function clearProject() {
   $('projectClear').style.display = 'none';
   updateSubmitButton();
 }
-
 
 async function fetchProjects(): Promise<GitLabProject[]> {
   if (!tabInfo || !apiToken) return [];
@@ -624,6 +624,7 @@ async function createTicket() {
     ($('ticketEstimate') as HTMLInputElement).value = '';
     ($('ticketSpent') as HTMLInputElement).value = '';
     ($('ticketSummary') as HTMLInputElement).value = '';
+    clearTicketDraft();
     btn.textContent = 'Create Ticket';
     updateSubmitButton();
   } catch (err: any) {
@@ -808,6 +809,54 @@ async function saveNotes(items: string[]): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.set({ quickNotes: items }, resolve);
   });
+}
+
+// ── New-ticket draft persistence ──
+
+interface TicketDraft {
+  title: string;
+  description: string;
+  estimate: string;
+  spent: string;
+  summary: string;
+}
+
+const TICKET_DRAFT_FIELDS: Record<keyof TicketDraft, string> = {
+  title: 'ticketTitle',
+  description: 'ticketDesc',
+  estimate: 'ticketEstimate',
+  spent: 'ticketSpent',
+  summary: 'ticketSummary',
+};
+
+function loadTicketDraft(): Promise<TicketDraft> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['newTicketDraft'], (result) => {
+      const d = result.newTicketDraft || {};
+      resolve({
+        title: d.title || '',
+        description: d.description || '',
+        estimate: d.estimate || '',
+        spent: d.spent || '',
+        summary: d.summary || '',
+      });
+    });
+  });
+}
+
+function saveTicketDraft(): void {
+  const draft: TicketDraft = {
+    title: ($('ticketTitle') as HTMLInputElement).value,
+    description: ($('ticketDesc') as HTMLTextAreaElement).value,
+    estimate: ($('ticketEstimate') as HTMLInputElement).value,
+    spent: ($('ticketSpent') as HTMLInputElement).value,
+    summary: ($('ticketSummary') as HTMLInputElement).value,
+  };
+  chrome.storage.local.set({ newTicketDraft: draft });
+}
+
+function clearTicketDraft(): void {
+  chrome.storage.local.remove('newTicketDraft');
 }
 
 function updateNotesBadge() {
@@ -1339,6 +1388,7 @@ function showOnboarding() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initWorkSettings();
   // Apply theme early
   const themeMode = await loadThemeMode();
   applyPopupTheme(themeMode);
@@ -1468,9 +1518,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mid = Math.ceil(presets.length / 2);
     const row1 = presets.slice(0, mid);
     const row2 = presets.slice(mid);
-    const renderRow = (items: typeof presets) => items.map(
-      (p) => `<button class="time-prefill" data-value="${p.value}">${p.label}</button>`
-    ).join('');
+    const renderRow = (items: typeof presets) =>
+      items
+        .map((p) => `<button class="time-prefill" data-value="${p.value}">${p.label}</button>`)
+        .join('');
 
     el.innerHTML = `<div class="time-prefill-row">${renderRow(row1)}</div><div class="time-prefill-row">${renderRow(row2)}</div>`;
 
@@ -1483,8 +1534,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Restore cached new-ticket draft and keep it synced on every edit.
+  const ticketDraft = await loadTicketDraft();
+  (Object.keys(TICKET_DRAFT_FIELDS) as (keyof TicketDraft)[]).forEach((field) => {
+    const el = $(TICKET_DRAFT_FIELDS[field]) as HTMLInputElement | HTMLTextAreaElement;
+    el.value = ticketDraft[field];
+    el.addEventListener('input', saveTicketDraft);
+  });
+  updateSubmitButton();
+
   $('ticketTitle').addEventListener('input', updateSubmitButton);
   $('submitBtn').addEventListener('click', createTicket);
+
+  $('ticketClearBtn').addEventListener('click', () => {
+    (Object.values(TICKET_DRAFT_FIELDS) as string[]).forEach((id) => {
+      ($(id) as HTMLInputElement | HTMLTextAreaElement).value = '';
+    });
+    clearTicketDraft();
+    updateSubmitButton();
+  });
 
   $('todayRefresh').addEventListener('click', () => {
     loadToday(selectedDayDate || undefined);

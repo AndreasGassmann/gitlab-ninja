@@ -409,6 +409,22 @@
         box-shadow: none;
         transform: none;
       }
+      .ticket-clear-btn {
+        padding: 11px 14px;
+        background: var(--bg-hover);
+        color: var(--text-muted);
+        border: none;
+        border-radius: var(--radius);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .ticket-clear-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-deep);
+      }
 
       .status-msg {
         margin-top: 12px;
@@ -1526,7 +1542,12 @@
           placeholder="e.g. Implemented feature X"
         />
 
-        <button class="submit-btn" id="submitBtn" disabled>Create Ticket</button>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button class="submit-btn" id="submitBtn" style="flex: 1" disabled>
+            Create Ticket
+          </button>
+          <button class="ticket-clear-btn" id="ticketClearBtn" type="button">Clear</button>
+        </div>
         <div class="status-msg" id="statusMsg"></div>
       </div>
     </div>
