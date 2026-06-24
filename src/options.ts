@@ -11,9 +11,20 @@ import {
   loadThemeMode,
   saveThemeMode,
 } from './utils/themeManager';
+import {
+  DraftManager,
+  applyDrafts,
+  buildPlan,
+  parseDurationToSeconds,
+  isDraftId,
+  DraftStatus,
+  DraftDesired,
+  PlanItem,
+} from './utils/timelogDrafts';
 
 interface WeeklyTimelog {
   issueIid: number;
+  issueGid: string;
   issueTitle: string;
   issueUrl: string;
   projectName: string;
@@ -38,6 +49,7 @@ interface TimelogDetail {
   issueState: string; // opened, closed
   timeEstimate: number; // seconds
   totalTimeSpent: number; // seconds
+  labels?: string[]; // issue labels (for breakdown aggregation)
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -55,6 +67,13 @@ let hideWeekends = false;
 let boardGroupPath: string | null = null;
 let username: string | null = null;
 let operationInProgress = false;
+
+// ── Draft mode ──
+type DisplayTimelog = TimelogDetail & { draftStatus?: DraftStatus };
+const drafts = new DraftManager();
+let displayTimelogs: DisplayTimelog[] = [];
+let rangeStartKey = '';
+let rangeEndKey = '';
 
 let currentColors: CustomColors = { ...DEFAULT_COLORS };
 let currentThemeMode: ThemeMode = 'auto';
@@ -291,17 +310,9 @@ async function fetchWeekTimelogs(
   const startKey = localDateStr(start);
   const endKey = localDateStr(end);
 
-  const map = new Map<string, WeeklyTimelog>();
-  const timelogs: TimelogDetail[] = [];
-
-  for (const node of nodes) {
-    if (!node.issue) continue;
-    const key = `${node.issue.webUrl}`;
-    const fullSpentAt = node.spentAt || new Date().toISOString();
-    const spentDateKey = getDateFromSpentAt(fullSpentAt);
-    if (spentDateKey < startKey || spentDateKey >= endKey) continue;
-
-    timelogs.push({
+  const details: TimelogDetail[] = nodes
+    .filter((node) => node.issue)
+    .map((node) => ({
       id: node.id,
       issueIid: parseInt(node.issue.iid, 10),
       issueTitle: node.issue.title,
@@ -311,28 +322,52 @@ async function fetchWeekTimelogs(
       projectId: node.project?.id || '',
       note: node.summary || '',
       timeSpent: node.timeSpent,
-      spentAt: fullSpentAt,
+      spentAt: node.spentAt || new Date().toISOString(),
       issueState: node.issue.state || 'opened',
       timeEstimate: node.issue.timeEstimate || 0,
       totalTimeSpent: node.issue.totalTimeSpent || 0,
-    });
+      labels: (node.issue.labels?.nodes || []).map((l: any) => l.title),
+    }));
 
+  return aggregateTimelogs(details, startKey, endKey);
+}
+
+/**
+ * Clamp timelogs to [startKey, endKey) by local date and aggregate them into
+ * per-issue WeeklyTimelog entries. Shared by the network fetch and draft-mode
+ * re-rendering so both produce identical breakdowns.
+ */
+function aggregateTimelogs(
+  details: TimelogDetail[],
+  startKey: string,
+  endKey: string
+): { entries: WeeklyTimelog[]; timelogs: TimelogDetail[] } {
+  const map = new Map<string, WeeklyTimelog>();
+  const timelogs: TimelogDetail[] = [];
+
+  for (const log of details) {
+    const spentDateKey = getDateFromSpentAt(log.spentAt);
+    if (spentDateKey < startKey || spentDateKey >= endKey) continue;
+
+    timelogs.push(log);
+
+    const key = log.issueGid;
     const existing = map.get(key);
     if (existing) {
-      existing.timeSpent += node.timeSpent;
-      existing.dailySpent[spentDateKey] = (existing.dailySpent[spentDateKey] || 0) + node.timeSpent;
+      existing.timeSpent += log.timeSpent;
+      existing.dailySpent[spentDateKey] = (existing.dailySpent[spentDateKey] || 0) + log.timeSpent;
     } else {
-      const labels = (node.issue.labels?.nodes || []).map((l: any) => l.title);
       map.set(key, {
-        issueIid: parseInt(node.issue.iid, 10),
-        issueTitle: node.issue.title,
-        issueUrl: node.issue.webUrl,
-        projectName: node.project?.name || '',
-        labels,
-        timeSpent: node.timeSpent,
-        timeEstimate: node.issue.timeEstimate || 0,
-        totalTimeSpent: node.issue.totalTimeSpent || 0,
-        dailySpent: { [spentDateKey]: node.timeSpent },
+        issueIid: log.issueIid,
+        issueGid: log.issueGid,
+        issueTitle: log.issueTitle,
+        issueUrl: log.issueUrl,
+        projectName: log.projectName,
+        labels: log.labels || [],
+        timeSpent: log.timeSpent,
+        timeEstimate: log.timeEstimate,
+        totalTimeSpent: log.totalTimeSpent,
+        dailySpent: { [spentDateKey]: log.timeSpent },
       });
     }
   }
@@ -621,12 +656,12 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       </div>
     `;
   } else {
-    // Build a map of timelogs grouped by issue URL
-    const timelogsByIssue = new Map<string, TimelogDetail[]>();
-    for (const log of cachedTimelogs) {
-      const list = timelogsByIssue.get(log.issueUrl) || [];
+    // Build a map of timelogs grouped by issue (drafts overlaid).
+    const timelogsByIssue = new Map<string, DisplayTimelog[]>();
+    for (const log of displayTimelogs) {
+      const list = timelogsByIssue.get(log.issueGid) || [];
       list.push(log);
-      timelogsByIssue.set(log.issueUrl, list);
+      timelogsByIssue.set(log.issueGid, list);
     }
 
     html += `<table class="issues-table">`;
@@ -672,7 +707,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       </tr>`;
 
       // ── Sub-rows: individual timelogs for this issue ──
-      const issueLogs = timelogsByIssue.get(entry.issueUrl) || [];
+      const issueLogs = timelogsByIssue.get(entry.issueGid) || [];
       for (const log of issueLogs) {
         const logDateStr = getDateFromSpentAt(log.spentAt);
         const parts = logDateStr.split('-');
@@ -680,10 +715,15 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
         const dateLabel = formatDayDate(logDate);
         const inRange = !filterDate || logDateStr === filterDate;
         const dimClass = inRange ? '' : ' timelog-dim';
+        const draftClass = log.draftStatus ? ` gn-draft-${log.draftStatus}` : '';
+        const draftTag = log.draftStatus
+          ? `<span class="gn-draft-tag gn-draft-tag-${log.draftStatus}">${log.draftStatus === 'new' ? 'new' : log.draftStatus === 'modified' ? 'edited' : 'del'}</span>`
+          : '';
 
-        html += `<tr class="timelog-row${dimClass}" data-timelog-id="${log.id}">
+        html += `<tr class="timelog-row${dimClass}${draftClass}" data-timelog-id="${log.id}">
           <td class="timelog-desc-cell" colspan="2">
             <span class="timelog-indent"></span>
+            ${draftTag}
             <span class="timelog-summary-display" data-timelog-id="${log.id}">${log.note ? escapeHtml(log.note) : '<span class="text-muted">No description</span>'}</span>
             <span class="timelog-row-actions">
               <button class="timelog-action-btn timelog-duplicate-btn" data-timelog-id="${log.id}" title="Duplicate">Dup</button>
@@ -701,8 +741,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       }
 
       // ── Add new timelog row ──
-      const firstLog = issueLogs[0];
-      const issueGid = firstLog?.issueGid || '';
+      const issueGid = entry.issueGid || issueLogs[0]?.issueGid || '';
       if (issueGid) {
         html += `<tr class="timelog-row timelog-add-row">
           <td colspan="5">
@@ -727,7 +766,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       } else {
         activeFilterDate = dateKey;
       }
-      renderWeek(cachedEntries, cachedDays, activeFilterDate);
+      renderCurrentView();
     });
   });
 
@@ -736,7 +775,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
     clearBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       activeFilterDate = null;
-      renderWeek(cachedEntries, cachedDays, null);
+      renderCurrentView();
     });
   }
 
@@ -819,13 +858,14 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       saveBtn.textContent = '...';
 
       try {
+        // Preserve the original time-of-day; only the date may change here.
         const newDate = field === 'date' ? val : getDateFromSpentAt(log.spentAt);
+        const time = hhmmFromISO(log.spentAt);
+        const newSpentAt = time ? `${newDate}T${time}:00` : newDate;
         const newDuration = field === 'duration' ? val : formatDurationInput(log.timeSpent);
         const newNote = field === 'summary' ? val : log.note;
 
-        await createTimelog(log.issueGid, newDuration, newDate, newNote);
-        await deleteTimelog(log.id);
-        await loadWeek();
+        await routeEdit(log, newDuration, newSpentAt, newNote);
       } catch (err: any) {
         alert(`Failed to save: ${err.message}`);
         cancel();
@@ -843,7 +883,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
   content.querySelectorAll('.timelog-summary-display').forEach((el) => {
     el.addEventListener('click', () => {
       const id = (el as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === id);
+      const log = displayTimelogs.find((t) => t.id === id);
       if (log) startEdit(el as HTMLElement, log, 'summary');
     });
   });
@@ -851,7 +891,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
   content.querySelectorAll('.timelog-date-display').forEach((el) => {
     el.addEventListener('click', () => {
       const id = (el as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === id);
+      const log = displayTimelogs.find((t) => t.id === id);
       if (log) startEdit(el as HTMLElement, log, 'date');
     });
   });
@@ -859,7 +899,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
   content.querySelectorAll('.timelog-duration-display').forEach((el) => {
     el.addEventListener('click', () => {
       const id = (el as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === id);
+      const log = displayTimelogs.find((t) => t.id === id);
       if (log) startEdit(el as HTMLElement, log, 'duration');
     });
   });
@@ -869,12 +909,8 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = (btn as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === id);
-      if (!log) return;
-      const ok = await performMutation(async () => {
-        await createTimelog(log.issueGid, formatDurationInput(log.timeSpent), log.spentAt, log.note);
-      });
-      if (ok) await loadWeek();
+      const log = displayTimelogs.find((t) => t.id === id);
+      if (log) await routeDuplicate(log);
     });
   });
 
@@ -882,20 +918,8 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = (btn as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === id);
-      if (!log || log.timeSpent < 120) return; // min 2 minutes to split
-      const firstHalf = Math.ceil(log.timeSpent / 2);
-      const secondHalf = log.timeSpent - firstHalf;
-      // Second entry starts after the first half
-      const startDate = new Date(log.spentAt);
-      const secondStart = new Date(startDate.getTime() + firstHalf * 1000);
-      const secondSpentAt = `${localDateStr(secondStart)}T${String(secondStart.getHours()).padStart(2, '0')}:${String(secondStart.getMinutes()).padStart(2, '0')}:00`;
-      const ok = await performMutation(async () => {
-        await createTimelog(log.issueGid, formatDurationInput(firstHalf), log.spentAt, log.note);
-        await createTimelog(log.issueGid, formatDurationInput(secondHalf), secondSpentAt, log.note);
-        await deleteTimelog(log.id);
-      });
-      if (ok) await loadWeek();
+      const log = displayTimelogs.find((t) => t.id === id);
+      if (log) await routeSplit(log);
     });
   });
 
@@ -987,9 +1011,23 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
         durInput.disabled = true;
 
         const spentAt = timeVal ? `${date}T${timeVal}:00` : date;
+        const ref = displayTimelogs.find((t) => t.issueGid === issueGid);
+        const desired: DraftDesired = {
+          issueGid,
+          issueIid: ref?.issueIid ?? 0,
+          issueTitle: ref?.issueTitle ?? '',
+          issueUrl: ref?.issueUrl ?? '',
+          projectName: ref?.projectName ?? '',
+          projectId: ref?.projectId ?? '',
+          issueState: ref?.issueState ?? 'opened',
+          timeEstimate: ref?.timeEstimate ?? 0,
+          totalTimeSpent: ref?.totalTimeSpent ?? 0,
+          timeSpent: parseDurationToSeconds(duration),
+          spentAt,
+          note,
+        };
         try {
-          await createTimelog(issueGid, duration, spentAt, note);
-          await loadWeek();
+          await routeAdd(desired, duration);
         } catch (err: any) {
           alert(`Failed to add time log: ${err.message}`);
           cancel();
@@ -1017,7 +1055,7 @@ function escapeHtml(str: string): string {
 // ── Calendar Week View ──
 
 interface CalBlock {
-  log: TimelogDetail;
+  log: DisplayTimelog;
   startMinutes: number;
   endMinutes: number;
   top: number;
@@ -1033,7 +1071,7 @@ function computeGridRange(_timelogs: TimelogDetail[]): { startHour: number; endH
 }
 
 function computeBlockPositions(
-  logs: TimelogDetail[],
+  logs: DisplayTimelog[],
   gridStartHour: number,
   gridEndHour: number
 ): CalBlock[] {
@@ -1111,7 +1149,7 @@ function computeBlockPositions(
   return blocks;
 }
 
-function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: WeeklyTimelog[]) {
+function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: WeeklyTimelog[]) {
   const content = $('weekContent');
 
   // Compute dynamic grid range from data
@@ -1119,7 +1157,7 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
   const totalHeight = (gridEndHour - gridStartHour) * CAL_PX_PER_HOUR;
 
   // Group timelogs by date
-  const byDate = new Map<string, TimelogDetail[]>();
+  const byDate = new Map<string, DisplayTimelog[]>();
   for (const log of timelogs) {
     const dateKey = getDateFromSpentAt(log.spentAt);
     const list = byDate.get(dateKey) || [];
@@ -1146,7 +1184,10 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
     const todayClass = isToday(d) ? ' cal-today' : '';
     const weekendClass = !hideWeekends && i >= 5 ? ' cal-weekend' : '';
     const dayLogs = byDate.get(dateKey) || [];
-    const dayTotal = dayLogs.reduce((sum, l) => sum + l.timeSpent, 0);
+    const dayTotal = dayLogs.reduce(
+      (sum, l) => sum + (l.draftStatus === 'deleted' ? 0 : l.timeSpent),
+      0
+    );
 
     dayHeadersHtml += `<div class="cal-day-header${todayClass}${weekendClass}">
       <div class="cal-day-name">${DAY_NAMES[i]}</div>
@@ -1159,11 +1200,16 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
     let blocksHtml = '';
     for (const block of blocks) {
       const color = getProjectColor(block.log.projectName);
+      const draftClass = block.log.draftStatus ? ` gn-draft-${block.log.draftStatus}` : '';
+      const draftTag = block.log.draftStatus
+        ? `<span class="gn-draft-tag gn-draft-tag-${block.log.draftStatus}">${block.log.draftStatus === 'new' ? 'new' : block.log.draftStatus === 'modified' ? 'edited' : 'del'}</span>`
+        : '';
       const tooltipText = `${block.log.issueTitle} — ${block.log.projectName}\n${formatDuration(block.log.timeSpent)}${block.log.note ? '\n' + block.log.note : ''}`;
-      blocksHtml += `<div class="cal-block"
+      blocksHtml += `<div class="cal-block${draftClass}"
         data-timelog-id="${block.log.id}"
         style="top:${block.top}px;height:${block.height}px;left:${block.left}%;width:${block.width}%;background:${color}20;border-left:3px solid ${color}"
         title="${escapeHtml(tooltipText).replace(/\n/g, '&#10;')}">
+        ${draftTag}
         <div class="cal-block-meta"><span class="cal-block-duration">${formatDuration(block.log.timeSpent)}</span>${block.height > 30 ? ` · ${escapeHtml(block.log.projectName)}` : ''}</div>
         <div class="cal-block-title">${escapeHtml(block.log.issueTitle)}</div>
         ${block.log.note && block.height > 40 ? `<div class="cal-block-note">${escapeHtml(block.log.note)}</div>` : ''}
@@ -1201,7 +1247,10 @@ function renderCalendarWeek(days: Date[], timelogs: TimelogDetail[], entries: We
   });
 
   // Week total
-  const weekTotal = timelogs.reduce((sum, l) => sum + l.timeSpent, 0);
+  const weekTotal = timelogs.reduce(
+    (sum, l) => sum + (l.draftStatus === 'deleted' ? 0 : l.timeSpent),
+    0
+  );
 
   let html = `
     <div class="cal-week-total">
@@ -1448,7 +1497,9 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
 
       if (dragState.type === 'move') {
         const colRect = dragState.targetDayColumn.getBoundingClientRect();
-        const newTop = snapToGrid(Math.max(0, ev.clientY - colRect.top - dragState.mouseOffsetInBlock));
+        const newTop = snapToGrid(
+          Math.max(0, ev.clientY - colRect.top - dragState.mouseOffsetInBlock)
+        );
         dragState.block.style.top = `${newTop}px`;
         dragState.block.classList.add('cal-dragging');
         document.body.style.cursor = 'grabbing';
@@ -1497,7 +1548,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
         justFinishedDrag = false;
       }, 0);
 
-      const log = cachedTimelogs.find((t) => t.id === state.logId);
+      const log = displayTimelogs.find((t) => t.id === state.logId);
       if (!log) return;
 
       if (state.type === 'move') {
@@ -1508,60 +1559,19 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
 
         const oldDate = getDateFromSpentAt(log.spentAt);
         const oldTime = parseTimeFromISO(log.spentAt);
-        const oldTimeStr = `${String(oldTime.hours).padStart(2, '0')}:${String(oldTime.minutes).padStart(2, '0')}`;
+        const oldTimeStr = `${pad2(oldTime.hours)}:${pad2(oldTime.minutes)}`;
         if (targetDate === oldDate && timeStr === oldTimeStr) return;
 
-        // Optimistic update: move the block in the DOM to the target column immediately
-        // and update cached data so re-render shows the block in its new position.
-        const oldSpentAt = log.spentAt;
-        log.spentAt = newSpentAt;
+        // Keep the dragged block opaque; routeEdit re-renders to its new spot.
         state.block.style.opacity = '1';
-
-        // If moved to a different day, relocate the DOM element
-        if (targetDate !== oldDate) {
-          state.targetDayColumn.appendChild(state.block);
-        }
-
-        // Fire-and-forget: API call + background sync
-        performMutation(async () => {
-          await createTimelog(
-            log.issueGid,
-            formatDurationInput(log.timeSpent),
-            newSpentAt,
-            log.note
-          );
-          await deleteTimelog(log.id);
-        }).then(async (ok) => {
-          if (!ok) {
-            // Revert optimistic update on failure
-            log.spentAt = oldSpentAt;
-          }
-          await silentRefresh();
-        });
+        await routeEdit(log, formatDurationInput(log.timeSpent), newSpentAt, log.note);
       } else {
         const newHeight = snapToGrid(parseFloat(state.block.style.height));
         const newDuration = pxToDurationSeconds(newHeight);
         if (newDuration === log.timeSpent) return;
 
-        // Optimistic update: keep the resized height visible
-        const oldTimeSpent = log.timeSpent;
-        log.timeSpent = newDuration;
         state.block.style.opacity = '1';
-
-        performMutation(async () => {
-          await createTimelog(
-            log.issueGid,
-            formatDurationInput(newDuration),
-            log.spentAt,
-            log.note
-          );
-          await deleteTimelog(log.id);
-        }).then(async (ok) => {
-          if (!ok) {
-            log.timeSpent = oldTimeSpent;
-          }
-          await silentRefresh();
-        });
+        await routeEdit(log, formatDurationInput(newDuration), log.spentAt, log.note);
       }
     };
 
@@ -1576,7 +1586,7 @@ function attachCalendarInteractions(container: HTMLElement, gridStartHour: numbe
       const e = ev as MouseEvent;
       e.stopPropagation();
       const logId = (block as HTMLElement).dataset.timelogId!;
-      const log = cachedTimelogs.find((t) => t.id === logId);
+      const log = displayTimelogs.find((t) => t.id === logId);
       if (log) showEditPopover(e.clientX, e.clientY, log);
     });
   });
@@ -1624,7 +1634,7 @@ function formatTimeFromISO(iso: string): string {
   return `${String(t.hours).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')}`;
 }
 
-function showEditPopover(x: number, y: number, log: TimelogDetail) {
+function showEditPopover(x: number, y: number, log: DisplayTimelog) {
   closeAllPopovers();
 
   const overlay = document.createElement('div');
@@ -1636,30 +1646,41 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
 
   const stateLabel = log.issueState === 'closed' ? 'Closed' : 'Open';
   const stateColor = log.issueState === 'closed' ? 'var(--red)' : 'var(--green, #22c55e)';
-  const pctLogged = log.timeEstimate > 0 ? Math.round((log.totalTimeSpent / log.timeEstimate) * 100) : null;
-  const pctColor = pctLogged !== null ? (pctLogged > 100 ? 'var(--red)' : 'var(--green, #22c55e)') : 'var(--text-muted, #aaa)';
+  const pctLogged =
+    log.timeEstimate > 0 ? Math.round((log.totalTimeSpent / log.timeEstimate) * 100) : null;
+  const pctColor =
+    pctLogged !== null
+      ? pctLogged > 100
+        ? 'var(--red)'
+        : 'var(--green, #22c55e)'
+      : 'var(--text-muted, #aaa)';
 
   // Collect all timelogs for the same issue, sorted by date
   const issueTimelogs = cachedTimelogs
     .filter((t) => t.issueGid === log.issueGid)
     .sort((a, b) => a.spentAt.localeCompare(b.spentAt));
-  const issueLogsHtml = issueTimelogs.length > 1
-    ? `<div style="font-size:12px;margin-bottom:8px;max-height:120px;overflow-y:auto">
+  const issueLogsHtml =
+    issueTimelogs.length > 1
+      ? `<div style="font-size:12px;margin-bottom:8px;max-height:120px;overflow-y:auto">
         <label class="form-label" style="margin-bottom:4px">Time logs this week</label>
-        ${issueTimelogs.map((t) => {
-          const isCurrent = t.id === log.id;
-          const date = getDateFromSpentAt(t.spentAt);
-          const time = formatTimeFromISO(t.spentAt);
-          const noteSnippet = t.note ? ' — ' + escapeHtml(t.note.length > 30 ? t.note.slice(0, 30) + '…' : t.note) : '';
-          return `<div style="display:flex;gap:6px;padding:2px 4px;border-radius:4px;${isCurrent ? 'background:rgba(255,255,255,0.08);font-weight:600' : ''};color:var(--text-muted, #aaa)">
+        ${issueTimelogs
+          .map((t) => {
+            const isCurrent = t.id === log.id;
+            const date = getDateFromSpentAt(t.spentAt);
+            const time = formatTimeFromISO(t.spentAt);
+            const noteSnippet = t.note
+              ? ' — ' + escapeHtml(t.note.length > 30 ? t.note.slice(0, 30) + '…' : t.note)
+              : '';
+            return `<div style="display:flex;gap:6px;padding:2px 4px;border-radius:4px;${isCurrent ? 'background:rgba(255,255,255,0.08);font-weight:600' : ''};color:var(--text-muted, #aaa)">
             <span style="min-width:70px">${date.slice(5)}</span>
             <span style="min-width:40px">${time}</span>
             <span style="min-width:40px;text-align:right">${formatDuration(t.timeSpent)}</span>
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${noteSnippet}</span>
           </div>`;
-        }).join('')}
+          })
+          .join('')}
       </div>`
-    : '';
+      : '';
 
   const popover = document.createElement('div');
   popover.className = 'cal-popover';
@@ -1724,37 +1745,18 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
   popover.querySelector('#popDelete')!.addEventListener('click', async () => {
     if (!confirm('Delete this time log?')) return;
     closeAllPopovers();
-    const ok = await performMutation(async () => {
-      await deleteTimelog(log.id);
-    });
-    if (ok) await silentRefresh();
-    else await silentRefresh();
+    await routeDelete(log);
   });
 
   popover.querySelector('#popDuplicate')!.addEventListener('click', async () => {
     closeAllPopovers();
-    const ok = await performMutation(async () => {
-      await createTimelog(log.issueGid, formatDurationInput(log.timeSpent), log.spentAt, log.note);
-    });
-    if (ok) await silentRefresh();
-    else await silentRefresh();
+    await routeDuplicate(log);
   });
 
   popover.querySelector('#popSplit')!.addEventListener('click', async () => {
     if (log.timeSpent < 120) return; // min 2 minutes
     closeAllPopovers();
-    const firstHalf = Math.ceil(log.timeSpent / 2);
-    const secondHalf = log.timeSpent - firstHalf;
-    const startDate = new Date(log.spentAt);
-    const secondStart = new Date(startDate.getTime() + firstHalf * 1000);
-    const secondSpentAt = `${localDateStr(secondStart)}T${String(secondStart.getHours()).padStart(2, '0')}:${String(secondStart.getMinutes()).padStart(2, '0')}:00`;
-    const ok = await performMutation(async () => {
-      await createTimelog(log.issueGid, formatDurationInput(firstHalf), log.spentAt, log.note);
-      await createTimelog(log.issueGid, formatDurationInput(secondHalf), secondSpentAt, log.note);
-      await deleteTimelog(log.id);
-    });
-    if (ok) await silentRefresh();
-    else await silentRefresh();
+    await routeSplit(log);
   });
 
   popover.querySelector('#popSave')!.addEventListener('click', async () => {
@@ -1771,16 +1773,7 @@ function showEditPopover(x: number, y: number, log: TimelogDetail) {
 
     const spentAt = time ? `${date}T${time}:00` : date;
     closeAllPopovers();
-    const ok = await performMutation(async () => {
-      await createTimelog(log.issueGid, duration, spentAt, note);
-      await deleteTimelog(log.id);
-    });
-    if (ok) await silentRefresh();
-    else {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
-      await silentRefresh();
-    }
+    await routeEdit(log, duration, spentAt, note);
   });
 
   popover.querySelectorAll('input, textarea').forEach((el) => {
@@ -1812,7 +1805,8 @@ async function searchAssignedIssues(
       gid: `gid://gitlab/Issue/${issue.id}`,
       title: issue.title,
       iid: issue.iid,
-      projectName: (issue.references?.full ?? '').split('#')[0].replace(/\/$/, '') || String(issue.project_id),
+      projectName:
+        (issue.references?.full ?? '').split('#')[0].replace(/\/$/, '') || String(issue.project_id),
     }));
   } catch {
     return [];
@@ -1828,7 +1822,12 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
   for (const log of [...cachedTimelogs].reverse()) {
     if (!seen.has(log.issueGid)) {
       seen.add(log.issueGid);
-      cachedIssues.push({ gid: log.issueGid, title: log.issueTitle, iid: log.issueIid, projectName: log.projectName });
+      cachedIssues.push({
+        gid: log.issueGid,
+        title: log.issueTitle,
+        iid: log.issueIid,
+        projectName: log.projectName,
+      });
     }
   }
 
@@ -1989,9 +1988,7 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     // If no explicit selection, try to match the typed text
     if (!issueGid) {
       const q = issueSearchInput.value.trim().toLowerCase();
-      const match = allIssues.find(
-        (iss) => iss.title.toLowerCase() === q || `#${iss.iid}` === q
-      );
+      const match = allIssues.find((iss) => iss.title.toLowerCase() === q || `#${iss.iid}` === q);
       if (match) {
         issueGid = match.gid;
       } else {
@@ -2018,24 +2015,34 @@ function showAddPopover(x: number, y: number, date: string, time: string) {
     saveBtn.textContent = '...';
 
     const spentAt = timeVal ? `${dateVal}T${timeVal}:00` : dateVal;
+    const issue = allIssues.find((i) => i.gid === issueGid);
+    const ref = displayTimelogs.find((t) => t.issueGid === issueGid);
+    const desired: DraftDesired = {
+      issueGid,
+      issueIid: issue?.iid ?? ref?.issueIid ?? 0,
+      issueTitle: issue?.title ?? ref?.issueTitle ?? '',
+      issueUrl: ref?.issueUrl ?? '',
+      projectName: issue?.projectName ?? ref?.projectName ?? '',
+      projectId: ref?.projectId ?? '',
+      issueState: ref?.issueState ?? 'opened',
+      timeEstimate: ref?.timeEstimate ?? 0,
+      totalTimeSpent: ref?.totalTimeSpent ?? 0,
+      timeSpent: parseDurationToSeconds(duration),
+      spentAt,
+      note,
+    };
     closeAllPopovers();
-    const ok = await performMutation(async () => {
-      await createTimelog(issueGid, duration, spentAt, note);
-    });
-    if (ok) await silentRefresh();
-    else {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
-      await silentRefresh();
-    }
+    await routeAdd(desired, duration);
   });
 
-  popover.querySelectorAll<HTMLInputElement>('#popDuration, #popDate, #popTime, #popNote').forEach((input) => {
-    input.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') closeAllPopovers();
-      if (ev.key === 'Enter') (popover.querySelector('#popSave') as HTMLElement).click();
+  popover
+    .querySelectorAll<HTMLInputElement>('#popDuration, #popDate, #popTime, #popNote')
+    .forEach((input) => {
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') closeAllPopovers();
+        if (ev.key === 'Enter') (popover.querySelector('#popSave') as HTMLElement).click();
+      });
     });
-  });
 
   issueSearchInput.focus();
 }
@@ -2109,7 +2116,7 @@ function getWeekOffsetForDate(date: Date): number {
 function renderCalendarMonth(
   days: Date[],
   targetMonth: number,
-  timelogs: TimelogDetail[],
+  timelogs: DisplayTimelog[],
   entries: WeeklyTimelog[]
 ) {
   const content = $('weekContent');
@@ -2117,8 +2124,11 @@ function renderCalendarMonth(
   // Group timelogs by date
   const dailyTotals = new Map<string, number>();
   const dailyProjects = new Map<string, Set<string>>();
+  const draftDays = new Set<string>();
   for (const log of timelogs) {
     const dateKey = getDateFromSpentAt(log.spentAt);
+    if (log.draftStatus) draftDays.add(dateKey);
+    if (log.draftStatus === 'deleted') continue; // excluded from totals
     dailyTotals.set(dateKey, (dailyTotals.get(dateKey) || 0) + log.timeSpent);
     if (!dailyProjects.has(dateKey)) dailyProjects.set(dateKey, new Set());
     dailyProjects.get(dateKey)!.add(log.projectName);
@@ -2153,7 +2163,8 @@ function renderCalendarMonth(
       dotsHtml += `<div class="cal-month-dot" style="background:${color}" title="${escapeHtml(proj)}"></div>`;
     }
 
-    html += `<div class="cal-month-cell${todayClass}${otherMonth}" data-date="${dateKey}" style="${heatBg}">
+    const draftClass = draftDays.has(dateKey) ? ' gn-draft-day' : '';
+    html += `<div class="cal-month-cell${todayClass}${otherMonth}${draftClass}" data-date="${dateKey}" style="${heatBg}">
       <div class="cal-month-date">${d.getDate()}</div>
       <div class="cal-month-hours${zeroClass}">${hours > 0 ? formatDuration(total) : ''}</div>
       <div class="cal-month-dots">${dotsHtml}</div>
@@ -2183,7 +2194,7 @@ function renderCalendarMonth(
 }
 
 async function loadMonth() {
-  const { year, month, days, start, end } = getMonthDates(monthOffset);
+  const { year, month, start, end } = getMonthDates(monthOffset);
   const monthName = new Date(year, month, 1).toLocaleString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -2198,9 +2209,11 @@ async function loadMonth() {
     const result = await fetchWeekTimelogs(start, end);
     cachedEntries = result.entries;
     cachedTimelogs = result.timelogs;
+    rangeStartKey = localDateStr(start);
+    rangeEndKey = localDateStr(end);
     const monthTotal = result.timelogs.reduce((sum, l) => sum + l.timeSpent, 0);
     $('weekLabelTotal').textContent = formatDuration(monthTotal);
-    renderCalendarMonth(days, month, result.timelogs, result.entries);
+    renderCurrentView();
   } catch (err: any) {
     content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
   }
@@ -2233,23 +2246,22 @@ async function silentRefresh() {
 
   try {
     if (currentView === 'month') {
-      const { month, days, start, end } = getMonthDates(monthOffset);
+      const { start, end } = getMonthDates(monthOffset);
       const result = await fetchWeekTimelogs(start, end);
       cachedEntries = result.entries;
       cachedTimelogs = result.timelogs;
-      renderCalendarMonth(days, month, result.timelogs, result.entries);
+      rangeStartKey = localDateStr(start);
+      rangeEndKey = localDateStr(end);
     } else {
       const { start, end, days } = getWeekDates(weekOffset);
       cachedDays = days;
       const result = await fetchWeekTimelogs(start, end);
       cachedEntries = result.entries;
       cachedTimelogs = result.timelogs;
-      if (currentView === 'week') {
-        renderCalendarWeek(days, result.timelogs, result.entries);
-      } else {
-        renderWeek(cachedEntries, days, activeFilterDate);
-      }
+      rangeStartKey = localDateStr(start);
+      rangeEndKey = localDateStr(end);
     }
+    renderCurrentView();
   } catch {
     // Silently ignore — user can manually refresh if needed
   }
@@ -2275,6 +2287,389 @@ async function performMutation(fn: () => Promise<void>): Promise<boolean> {
   }
 }
 
+// ── Draft-mode routing ──
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+function hhmmFromISO(iso: string): string {
+  const i = iso.indexOf('T');
+  return i === -1 ? '' : iso.slice(i + 1, i + 6);
+}
+
+// True when a proposed edit leaves an instant-mode timelog unchanged — skip the
+// create+delete entirely so no spurious "added/deleted" pair is produced.
+function isNoOpEdit(
+  orig: TimelogDetail,
+  timeSpent: number,
+  spentAt: string,
+  note: string
+): boolean {
+  return (
+    orig.timeSpent === timeSpent &&
+    getDateFromSpentAt(orig.spentAt) === getDateFromSpentAt(spentAt) &&
+    hhmmFromISO(orig.spentAt) === hhmmFromISO(spentAt) &&
+    (orig.note || '') === (note || '')
+  );
+}
+
+function displayToDesired(log: DisplayTimelog): DraftDesired {
+  return {
+    issueGid: log.issueGid,
+    issueIid: log.issueIid,
+    issueTitle: log.issueTitle,
+    issueUrl: log.issueUrl,
+    projectName: log.projectName,
+    projectId: log.projectId,
+    issueState: log.issueState,
+    timeEstimate: log.timeEstimate,
+    totalTimeSpent: log.totalTimeSpent,
+    timeSpent: log.timeSpent,
+    spentAt: log.spentAt,
+    note: log.note,
+  };
+}
+
+// Compute the effective (drafts overlaid) timelogs + breakdown for the current
+// view. In instant mode this is just the fetched data.
+function getDisplayData(): { timelogs: DisplayTimelog[]; entries: WeeklyTimelog[] } {
+  if (!drafts.isEnabled()) {
+    return { timelogs: cachedTimelogs as DisplayTimelog[], entries: cachedEntries };
+  }
+  const eff = applyDrafts(cachedTimelogs, drafts.state);
+  const nonDeleted = eff.filter((e) => e.draftStatus !== 'deleted');
+  const { entries } = aggregateTimelogs(nonDeleted, rangeStartKey, rangeEndKey);
+  return { timelogs: eff, entries };
+}
+
+// Re-render the current view from cache + drafts WITHOUT hitting the network.
+function renderCurrentView(): void {
+  const { timelogs, entries } = getDisplayData();
+  displayTimelogs = timelogs;
+  if (currentView === 'month') {
+    const { month, days } = getMonthDates(monthOffset);
+    renderCalendarMonth(days, month, timelogs, entries);
+  } else if (currentView === 'week') {
+    renderCalendarWeek(cachedDays, timelogs, entries);
+  } else {
+    renderWeek(entries, cachedDays, activeFilterDate);
+  }
+  updateDraftUI();
+}
+
+async function routeEdit(
+  log: DisplayTimelog,
+  durationStr: string,
+  spentAt: string,
+  note: string
+): Promise<boolean> {
+  const timeSpent = parseDurationToSeconds(durationStr);
+  if (drafts.isEnabled()) {
+    if (isDraftId(log.id)) {
+      drafts.editAdded(log.id, { timeSpent, spentAt, note });
+    } else {
+      const orig = cachedTimelogs.find((t) => t.id === log.id);
+      if (orig) drafts.editOriginal(orig, { timeSpent, spentAt, note });
+    }
+    renderCurrentView();
+    return true;
+  }
+  const orig = cachedTimelogs.find((t) => t.id === log.id) || log;
+  if (isNoOpEdit(orig, timeSpent, spentAt, note)) return true;
+  const ok = await performMutation(async () => {
+    await createTimelog(log.issueGid, durationStr, spentAt, note);
+    await deleteTimelog(log.id);
+  });
+  await silentRefresh();
+  return ok;
+}
+
+async function routeAdd(desired: DraftDesired, durationStr: string): Promise<boolean> {
+  if (drafts.isEnabled()) {
+    drafts.addNew(desired);
+    renderCurrentView();
+    return true;
+  }
+  const ok = await performMutation(async () => {
+    await createTimelog(desired.issueGid, durationStr, desired.spentAt, desired.note);
+  });
+  await silentRefresh();
+  return ok;
+}
+
+async function routeDelete(log: DisplayTimelog): Promise<boolean> {
+  if (drafts.isEnabled()) {
+    if (isDraftId(log.id)) drafts.deleteAdded(log.id);
+    else {
+      const orig = cachedTimelogs.find((t) => t.id === log.id);
+      if (orig) drafts.deleteOriginal(orig);
+    }
+    renderCurrentView();
+    return true;
+  }
+  const ok = await performMutation(async () => {
+    await deleteTimelog(log.id);
+  });
+  await silentRefresh();
+  return ok;
+}
+
+async function routeDuplicate(log: DisplayTimelog): Promise<boolean> {
+  if (drafts.isEnabled()) {
+    drafts.addNew(displayToDesired(log));
+    renderCurrentView();
+    return true;
+  }
+  const ok = await performMutation(async () => {
+    await createTimelog(log.issueGid, formatDurationInput(log.timeSpent), log.spentAt, log.note);
+  });
+  await silentRefresh();
+  return ok;
+}
+
+async function routeSplit(log: DisplayTimelog): Promise<boolean> {
+  if (log.timeSpent < 120) return false; // min 2 minutes
+  const firstHalf = Math.ceil(log.timeSpent / 2);
+  const secondHalf = log.timeSpent - firstHalf;
+  const startDate = new Date(log.spentAt);
+  const secondStart = new Date(startDate.getTime() + firstHalf * 1000);
+  const secondSpentAt = `${localDateStr(secondStart)}T${pad2(secondStart.getHours())}:${pad2(secondStart.getMinutes())}:00`;
+  if (drafts.isEnabled()) {
+    const base = displayToDesired(log);
+    drafts.addNew({ ...base, timeSpent: firstHalf, spentAt: log.spentAt });
+    drafts.addNew({ ...base, timeSpent: secondHalf, spentAt: secondSpentAt });
+    if (isDraftId(log.id)) drafts.deleteAdded(log.id);
+    else {
+      const orig = cachedTimelogs.find((t) => t.id === log.id);
+      if (orig) drafts.deleteOriginal(orig);
+    }
+    renderCurrentView();
+    return true;
+  }
+  const ok = await performMutation(async () => {
+    await createTimelog(log.issueGid, formatDurationInput(firstHalf), log.spentAt, log.note);
+    await createTimelog(log.issueGid, formatDurationInput(secondHalf), secondSpentAt, log.note);
+    await deleteTimelog(log.id);
+  });
+  await silentRefresh();
+  return ok;
+}
+
+// ── Draft-mode UI: toggle, commit, preview, summary ──
+
+function initDraftControls(): void {
+  const toggle = document.getElementById('draftToggle') as HTMLInputElement | null;
+  const commitBtn = document.getElementById('draftCommitBtn');
+  if (toggle) {
+    toggle.checked = drafts.isEnabled();
+    toggle.addEventListener('change', async () => {
+      if (!toggle.checked && drafts.hasPending()) {
+        const choice = await confirmToggleOff();
+        if (choice === 'cancel') {
+          toggle.checked = true;
+          return;
+        }
+        if (choice === 'commit') {
+          await showCommitPreview();
+          // If the commit failed partway, stay in draft mode with the leftovers.
+          if (drafts.hasPending()) {
+            toggle.checked = true;
+            return;
+          }
+        } else if (choice === 'discard') {
+          drafts.discardAll();
+        }
+      }
+      drafts.setEnabled(toggle.checked);
+      renderCurrentView();
+    });
+  }
+  if (commitBtn) commitBtn.addEventListener('click', () => showCommitPreview());
+  updateDraftUI();
+}
+
+function updateDraftUI(): void {
+  const toggle = document.getElementById('draftToggle') as HTMLInputElement | null;
+  if (toggle) toggle.checked = drafts.isEnabled();
+  const count = drafts.pendingCount();
+  const commitBtn = document.getElementById('draftCommitBtn');
+  if (commitBtn) {
+    commitBtn.style.display = drafts.isEnabled() && count > 0 ? '' : 'none';
+    const c = document.getElementById('draftCount');
+    if (c) c.textContent = count > 0 ? `(${count})` : '';
+  }
+  document.body.classList.toggle('gn-draft-active', drafts.isEnabled());
+}
+
+// Generic centered modal. Returns the elements + a close fn.
+function openModal(innerHtml: string): {
+  overlay: HTMLElement;
+  modal: HTMLElement;
+  close: () => void;
+} {
+  const overlay = document.createElement('div');
+  overlay.className = 'gn-modal-overlay';
+  const modal = document.createElement('div');
+  modal.className = 'gn-modal';
+  modal.innerHTML = innerHtml;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+  return { overlay, modal, close };
+}
+
+function confirmToggleOff(): Promise<'commit' | 'discard' | 'cancel'> {
+  return new Promise((resolve) => {
+    const n = drafts.pendingCount();
+    const { modal, close } = openModal(`
+      <div class="gn-modal-title">Uncommitted changes</div>
+      <div class="gn-modal-body">You have ${n} pending change${n === 1 ? '' : 's'} that have not been sent to GitLab.</div>
+      <div class="gn-modal-actions">
+        <button class="timelog-cancel-btn" data-act="cancel">Cancel</button>
+        <button class="timelog-cancel-btn" data-act="discard" style="color:var(--red);border-color:rgba(248,113,113,0.3)">Discard</button>
+        <button class="timelog-save-btn" data-act="commit">Commit now</button>
+      </div>
+    `);
+    modal.querySelectorAll('[data-act]').forEach((b) =>
+      b.addEventListener('click', () => {
+        close();
+        resolve((b as HTMLElement).dataset.act as 'commit' | 'discard' | 'cancel');
+      })
+    );
+  });
+}
+
+function describePlanItem(item: PlanItem): string {
+  const d = item.desired;
+  const when = `${getDateFromSpentAt(d.spentAt)} ${hhmmFromISO(d.spentAt) || ''}`.trim();
+  const head = `#${d.issueIid} ${d.issueTitle}`;
+  if (item.kind === 'add') {
+    return `<strong class="gn-tag-new">ADD</strong> ${formatDuration(d.timeSpent)} @ ${when} — ${escapeHtml(head)}`;
+  }
+  if (item.kind === 'delete') {
+    return `<strong class="gn-tag-del">DELETE</strong> ${formatDuration(d.timeSpent)} @ ${when} — ${escapeHtml(head)}`;
+  }
+  // modify — show what changed
+  const o = item.original!;
+  const parts: string[] = [];
+  if (o.timeSpent !== d.timeSpent)
+    parts.push(`${formatDuration(o.timeSpent)} → ${formatDuration(d.timeSpent)}`);
+  const oWhen = `${getDateFromSpentAt(o.spentAt)} ${hhmmFromISO(o.spentAt)}`.trim();
+  if (oWhen !== when) parts.push(`${oWhen} → ${when}`);
+  if ((o.note || '') !== (d.note || '')) parts.push(`note changed`);
+  return `<strong class="gn-tag-mod">EDIT</strong> ${parts.join(', ')} — ${escapeHtml(head)}`;
+}
+
+async function showCommitPreview(): Promise<void> {
+  const plan = buildPlan(drafts.state);
+  if (plan.length === 0) return;
+  const apiCalls = plan.reduce((n, p) => n + (p.kind === 'modify' ? 2 : 1), 0);
+  const rows = plan.map((p) => `<li class="gn-plan-row">${describePlanItem(p)}</li>`).join('');
+  const { modal, close } = openModal(`
+    <div class="gn-modal-title">Commit changes</div>
+    <ul class="gn-plan-list">${rows}</ul>
+    <div class="gn-modal-foot">${plan.length} change${plan.length === 1 ? '' : 's'} → ${apiCalls} API call${apiCalls === 1 ? '' : 's'}</div>
+    <div class="gn-modal-actions">
+      <button class="timelog-cancel-btn" data-act="cancel">Cancel</button>
+      <button class="timelog-save-btn" data-act="confirm">Commit</button>
+    </div>
+  `);
+  modal.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
+  modal.querySelector('[data-act="confirm"]')!.addEventListener('click', async () => {
+    const btn = modal.querySelector('[data-act="confirm"]') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = 'Committing…';
+    const result = await commitDrafts();
+    close();
+    await silentRefresh();
+    showCommitSummary(result);
+  });
+}
+
+interface CommitResult {
+  ok: number;
+  failed: { item: PlanItem; error: string }[];
+  dupes: PlanItem[]; // created but old copy could not be deleted
+}
+
+async function commitDrafts(): Promise<CommitResult> {
+  const plan = buildPlan(drafts.state);
+  const result: CommitResult = { ok: 0, failed: [], dupes: [] };
+  for (const item of plan) {
+    try {
+      if (item.kind === 'add') {
+        await createTimelog(
+          item.desired.issueGid,
+          formatDurationInput(item.desired.timeSpent),
+          item.desired.spentAt,
+          item.desired.note
+        );
+        drafts.clear(item);
+        result.ok++;
+      } else if (item.kind === 'delete') {
+        await deleteTimelog(item.originId!);
+        drafts.clear(item);
+        result.ok++;
+      } else {
+        // modify: create the new entry first, then remove the old one.
+        await createTimelog(
+          item.desired.issueGid,
+          formatDurationInput(item.desired.timeSpent),
+          item.desired.spentAt,
+          item.desired.note
+        );
+        try {
+          await deleteTimelog(item.originId!);
+          drafts.clear(item);
+          result.ok++;
+        } catch {
+          // New entry exists but the old one survives → duplicate. Clear the
+          // draft so a re-commit won't create yet another copy; flag it.
+          drafts.clear(item);
+          result.dupes.push(item);
+        }
+      }
+    } catch (err: any) {
+      result.failed.push({ item, error: err?.message || String(err) });
+    }
+  }
+  return result;
+}
+
+function showCommitSummary(r: CommitResult): void {
+  if (r.failed.length === 0 && r.dupes.length === 0) {
+    // Clean success — no modal needed.
+    return;
+  }
+  const dupeRows = r.dupes
+    .map(
+      (p) =>
+        `<li class="gn-plan-row"><strong class="gn-tag-warn">DUPLICATE</strong> ${escapeHtml(
+          `#${p.desired.issueIid} ${p.desired.issueTitle}`
+        )} — new entry created, old copy NOT removed. Delete the old one manually.</li>`
+    )
+    .join('');
+  const failRows = r.failed
+    .map(
+      (f) =>
+        `<li class="gn-plan-row"><strong class="gn-tag-del">FAILED</strong> ${escapeHtml(
+          `#${f.item.desired.issueIid} ${f.item.desired.issueTitle}`
+        )} — ${escapeHtml(f.error)} (still staged)</li>`
+    )
+    .join('');
+  const { modal, close } = openModal(`
+    <div class="gn-modal-title">Commit summary</div>
+    <div class="gn-modal-body">${r.ok} change${r.ok === 1 ? '' : 's'} committed.</div>
+    <ul class="gn-plan-list">${dupeRows}${failRows}</ul>
+    <div class="gn-modal-actions">
+      <button class="timelog-save-btn" data-act="ok">Close</button>
+    </div>
+  `);
+  modal.querySelector('[data-act="ok"]')!.addEventListener('click', close);
+}
+
 async function loadWeek() {
   const { start, end, days } = getWeekDates(weekOffset);
   cachedDays = days;
@@ -2289,13 +2684,11 @@ async function loadWeek() {
     const result = await fetchWeekTimelogs(start, end);
     cachedEntries = result.entries;
     cachedTimelogs = result.timelogs;
+    rangeStartKey = localDateStr(start);
+    rangeEndKey = localDateStr(end);
     const weekTotal = result.timelogs.reduce((sum, l) => sum + l.timeSpent, 0);
     $('weekLabelTotal').textContent = formatDuration(weekTotal);
-    if (currentView === 'week') {
-      renderCalendarWeek(days, result.timelogs, result.entries);
-    } else {
-      renderWeek(cachedEntries, days, null);
-    }
+    renderCurrentView();
   } catch (err: any) {
     content.innerHTML = `<div class="empty-state"><div class="empty-state-text" style="color:var(--red-500)">${escapeHtml(err.message)}</div></div>`;
   }
@@ -2752,6 +3145,10 @@ function flashSaveStatus(text: string, ok: boolean) {
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await detectGitlabUrl();
+
+  // Draft mode: scope staged edits per gitlab instance + user.
+  drafts.init(`${gitlabUrl || 'default'}|${username || ''}`);
+  initDraftControls();
 
   // Load theme mode and custom colors
   currentThemeMode = await loadThemeMode();
