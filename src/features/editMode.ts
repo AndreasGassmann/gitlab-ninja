@@ -246,7 +246,7 @@ export class EditModeFeature {
     );
     let selectedTime = nowTime;
 
-    // 15-minute time options for the dropdown (00:00 … 23:45)
+    // Time options for the dropdown, stepped by the configured time increment
     let timeOptionsHtml = '<option value=""></option>';
     for (let h = 0; h < 24; h++) {
       for (let m = 0; m < 60; m += getWorkSettings().timeIncrementMinutes) {
