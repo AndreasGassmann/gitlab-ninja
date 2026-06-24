@@ -2273,6 +2273,58 @@
                 </div>
               </div>
 
+              <div class="notif-card">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="notifNagEnabled" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px">Keep nagging me</div>
+                    <div class="form-hint" style="margin-top: 2px">
+                      Reminds you on a set interval during the day whenever you're behind the
+                      pro-rated pace toward your daily target.
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap">
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifNagStart">From</label>
+                    <input class="form-input" type="time" id="notifNagStart" value="10:00" />
+                  </div>
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifNagEnd">To</label>
+                    <input class="form-input" type="time" id="notifNagEnd" value="16:00" />
+                  </div>
+                </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px">
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifNagInterval">Every (hours)</label>
+                    <input
+                      class="form-input"
+                      type="number"
+                      id="notifNagInterval"
+                      value="2"
+                      min="0.25"
+                      max="12"
+                      step="0.25"
+                    />
+                  </div>
+                  <div class="form-row" style="flex: 1; min-width: 140px">
+                    <label class="form-label" for="notifNagTarget">Daily target (hours)</label>
+                    <input
+                      class="form-input"
+                      type="number"
+                      id="notifNagTarget"
+                      value="8"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div class="form-row" style="display: flex; align-items: center; margin-top: 4px">
                 <button
                   class="btn-primary"

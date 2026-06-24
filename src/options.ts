@@ -3046,18 +3046,44 @@ interface NotificationSettings {
   enabled: boolean;
   startOfDay: { enabled: boolean; time: string; minHours: number };
   endOfDay: { enabled: boolean; time: string; minHours: number };
+  nagging: {
+    enabled: boolean;
+    startTime: string;
+    endTime: string;
+    intervalHours: number;
+    targetHours: number;
+  };
 }
 
 const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: false,
   startOfDay: { enabled: true, time: '08:45', minHours: 8 },
   endOfDay: { enabled: true, time: '17:00', minHours: 8 },
+  nagging: {
+    enabled: false,
+    startTime: '10:00',
+    endTime: '16:00',
+    intervalHours: 2,
+    targetHours: 8,
+  },
 };
 
 async function loadNotificationSettings(): Promise<NotificationSettings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get('notificationSettings', (result) => {
-      resolve(result.notificationSettings || DEFAULT_NOTIFICATION_SETTINGS);
+      const stored = result.notificationSettings;
+      if (!stored) {
+        resolve(DEFAULT_NOTIFICATION_SETTINGS);
+        return;
+      }
+      // Merge defaults so settings saved before a field existed (e.g. nagging) stay valid.
+      resolve({
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...stored,
+        startOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.startOfDay, ...stored.startOfDay },
+        endOfDay: { ...DEFAULT_NOTIFICATION_SETTINGS.endOfDay, ...stored.endOfDay },
+        nagging: { ...DEFAULT_NOTIFICATION_SETTINGS.nagging, ...stored.nagging },
+      });
     });
   });
 }
@@ -3079,6 +3105,13 @@ function readNotificationForm(): NotificationSettings {
       time: ($('notifEndTime') as HTMLInputElement).value || '17:00',
       minHours: parseFloat(($('notifEndHours') as HTMLInputElement).value) || 8,
     },
+    nagging: {
+      enabled: ($('notifNagEnabled') as HTMLInputElement).checked,
+      startTime: ($('notifNagStart') as HTMLInputElement).value || '10:00',
+      endTime: ($('notifNagEnd') as HTMLInputElement).value || '16:00',
+      intervalHours: parseFloat(($('notifNagInterval') as HTMLInputElement).value) || 2,
+      targetHours: parseFloat(($('notifNagTarget') as HTMLInputElement).value) || 8,
+    },
   };
 }
 
@@ -3090,6 +3123,11 @@ function populateNotificationForm(settings: NotificationSettings): void {
   ($('notifEndEnabled') as HTMLInputElement).checked = settings.endOfDay.enabled;
   ($('notifEndTime') as HTMLInputElement).value = settings.endOfDay.time;
   ($('notifEndHours') as HTMLInputElement).value = String(settings.endOfDay.minHours);
+  ($('notifNagEnabled') as HTMLInputElement).checked = settings.nagging.enabled;
+  ($('notifNagStart') as HTMLInputElement).value = settings.nagging.startTime;
+  ($('notifNagEnd') as HTMLInputElement).value = settings.nagging.endTime;
+  ($('notifNagInterval') as HTMLInputElement).value = String(settings.nagging.intervalHours);
+  ($('notifNagTarget') as HTMLInputElement).value = String(settings.nagging.targetHours);
   updateNotifBodyState(settings.enabled);
 }
 
@@ -3116,6 +3154,11 @@ function initNotificationSettings(): void {
     'notifEndEnabled',
     'notifEndTime',
     'notifEndHours',
+    'notifNagEnabled',
+    'notifNagStart',
+    'notifNagEnd',
+    'notifNagInterval',
+    'notifNagTarget',
   ]) {
     $(id).addEventListener('change', () => {
       saveNotificationSettings(readNotificationForm());
