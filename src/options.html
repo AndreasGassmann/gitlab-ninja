@@ -796,9 +796,9 @@
         line-height: 1.4;
       }
       .timelog-action-btn:hover {
-        background: rgba(255,255,255,0.08);
+        background: rgba(255, 255, 255, 0.08);
         color: var(--text-secondary);
-        border-color: rgba(255,255,255,0.1);
+        border-color: rgba(255, 255, 255, 0.1);
       }
       .timelog-field-display,
       .timelog-summary-display {
@@ -960,6 +960,156 @@
         background: var(--accent-dim);
         border-color: var(--accent);
         color: var(--accent);
+      }
+
+      /* ── Draft mode ── */
+      .draft-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .draft-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+      }
+      .draft-toggle input {
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .draft-commit-btn {
+        padding: 5px 14px;
+        font-size: 12px;
+      }
+      /* Tags shown on staged entries */
+      .gn-draft-tag {
+        display: inline-block;
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-right: 4px;
+        vertical-align: middle;
+      }
+      .gn-draft-tag-new {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+      .gn-draft-tag-modified {
+        background: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+      }
+      .gn-draft-tag-deleted {
+        background: rgba(248, 113, 113, 0.2);
+        color: #f87171;
+      }
+      /* Calendar blocks + list rows by draft status */
+      .cal-block.gn-draft-new {
+        outline: 2px dashed #22c55e;
+        outline-offset: -2px;
+      }
+      .cal-block.gn-draft-modified {
+        outline: 2px dashed #f59e0b;
+        outline-offset: -2px;
+      }
+      .cal-block.gn-draft-deleted,
+      .timelog-row.gn-draft-deleted {
+        opacity: 0.45;
+        text-decoration: line-through;
+      }
+      .timelog-row.gn-draft-new {
+        background: rgba(34, 197, 94, 0.07);
+      }
+      .timelog-row.gn-draft-modified {
+        background: rgba(245, 158, 11, 0.07);
+      }
+      .cal-month-cell.gn-draft-day::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .cal-month-cell {
+        position: relative;
+      }
+
+      /* ── Modal (commit preview / summary / confirm) ── */
+      .gn-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .gn-modal {
+        background: var(--bg-card, #1a1d2b);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        width: min(560px, 92vw);
+        max-height: 82vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      .gn-modal-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+      .gn-modal-body {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
+      .gn-plan-list {
+        list-style: none;
+        margin: 0 0 12px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .gn-plan-row {
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .gn-plan-row .gn-tag-new {
+        color: #22c55e;
+      }
+      .gn-plan-row .gn-tag-mod {
+        color: #f59e0b;
+      }
+      .gn-plan-row .gn-tag-del {
+        color: #f87171;
+      }
+      .gn-plan-row .gn-tag-warn {
+        color: #f59e0b;
+      }
+      .gn-modal-foot {
+        font-size: 12px;
+        color: var(--text-muted, #aaa);
+        margin-bottom: 14px;
+      }
+      .gn-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
       }
 
       /* ── Calendar Grid ── */
@@ -1887,6 +2037,19 @@
               <button class="view-toggle-btn active" data-view="list">List</button>
               <button class="view-toggle-btn" data-view="week">Week</button>
               <button class="view-toggle-btn" data-view="month">Month</button>
+            </div>
+            <div class="draft-controls">
+              <label class="draft-toggle" title="Stage edits locally and commit them together">
+                <input type="checkbox" id="draftToggle" />
+                <span>Draft mode</span>
+              </label>
+              <button
+                class="btn-primary draft-commit-btn"
+                id="draftCommitBtn"
+                style="display: none"
+              >
+                Commit <span id="draftCount"></span>
+              </button>
             </div>
             <div class="week-nav">
               <button class="week-nav-btn" id="weekPrev" title="Previous week">
