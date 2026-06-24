@@ -1,6 +1,7 @@
 import { loadThemeMode, ThemeMode } from './utils/themeManager';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from './utils/constants';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import { initWorkSettings } from './utils/workSettings';
 
 export {};
 
@@ -276,7 +277,6 @@ function clearProject() {
   $('projectClear').style.display = 'none';
   updateSubmitButton();
 }
-
 
 async function fetchProjects(): Promise<GitLabProject[]> {
   if (!tabInfo || !apiToken) return [];
@@ -1339,6 +1339,7 @@ function showOnboarding() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initWorkSettings();
   // Apply theme early
   const themeMode = await loadThemeMode();
   applyPopupTheme(themeMode);
@@ -1468,9 +1469,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mid = Math.ceil(presets.length / 2);
     const row1 = presets.slice(0, mid);
     const row2 = presets.slice(mid);
-    const renderRow = (items: typeof presets) => items.map(
-      (p) => `<button class="time-prefill" data-value="${p.value}">${p.label}</button>`
-    ).join('');
+    const renderRow = (items: typeof presets) =>
+      items
+        .map((p) => `<button class="time-prefill" data-value="${p.value}">${p.label}</button>`)
+        .join('');
 
     el.innerHTML = `<div class="time-prefill-row">${renderRow(row1)}</div><div class="time-prefill-row">${renderRow(row2)}</div>`;
 

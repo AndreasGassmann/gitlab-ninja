@@ -22,6 +22,7 @@ import {
   PlanItem,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import { initWorkSettings } from './utils/workSettings';
 
 interface WeeklyTimelog {
   issueIid: number;
@@ -3233,6 +3234,7 @@ function flashSaveStatus(text: string, ok: boolean) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await initWorkSettings();
   await loadSettings();
   await detectGitlabUrl();
 

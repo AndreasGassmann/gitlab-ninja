@@ -3,6 +3,8 @@
  * Handles scheduled notifications for time tracking reminders.
  */
 
+import { initWorkSettings } from './utils/workSettings';
+
 interface NotificationSettings {
   enabled: boolean;
   startOfDay: {
@@ -235,6 +237,7 @@ function getNextNagTime(startTime: string, endTime: string, intervalHours: numbe
 }
 
 async function handleStartOfDayAlarm(): Promise<void> {
+  await initWorkSettings();
   const now = new Date();
   // Only fire on weekdays
   if (!isWeekday(now)) return;
@@ -262,6 +265,7 @@ async function handleStartOfDayAlarm(): Promise<void> {
 }
 
 async function handleEndOfDayAlarm(): Promise<void> {
+  await initWorkSettings();
   const now = new Date();
   // Only fire on weekdays
   if (!isWeekday(now)) return;
@@ -287,6 +291,7 @@ async function handleEndOfDayAlarm(): Promise<void> {
 }
 
 async function handleNaggingAlarm(): Promise<void> {
+  await initWorkSettings();
   const now = new Date();
   // Only fire on weekdays
   if (!isWeekday(now)) return;

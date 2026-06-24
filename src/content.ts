@@ -22,6 +22,7 @@ import {
   ThemeMode,
 } from './utils/themeManager';
 import { debugLog, debugWarn } from './utils/debug';
+import { initWorkSettings } from './utils/workSettings';
 
 // Generate a nonce to authenticate custom events between content and injected scripts
 const eventNonce = crypto.randomUUID();
@@ -47,6 +48,9 @@ if (window.location.hostname === 'gitlab.com') {
 } else {
   debugLog('GitLab Ninja: Interceptor registered via world:MAIN for this domain');
 }
+
+// Warm the work-settings cache early so time.ts helpers are ready
+initWorkSettings();
 
 // Apply custom colors early so they're ready before board renders
 loadCustomColors().then(applyColorOverrides);
@@ -307,7 +311,8 @@ debugLog('GitLab Ninja: Current URL:', window.location.href);
 
 if (document.readyState === 'loading') {
   debugLog('GitLab Ninja: Waiting for DOMContentLoaded...');
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    await initWorkSettings();
     debugLog('GitLab Ninja: DOMContentLoaded fired');
     ninjaInstance = new GitLabNinja();
     ninjaInstance.init();
