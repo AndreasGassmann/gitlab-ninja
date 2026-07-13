@@ -1165,9 +1165,51 @@
         cursor: pointer;
       }
       .cal-grid-wrapper {
+        position: relative;
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
         overflow: hidden;
+      }
+      /* Side badge shown when weekends are hidden but carry time logs */
+      .cal-weekend-hidden-indicator {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        writing-mode: vertical-rl;
+        padding: 12px 5px;
+        border: 1px solid var(--amber);
+        border-right: none;
+        border-radius: 10px 0 0 10px;
+        background: var(--amber-dim);
+        color: var(--amber);
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        cursor: pointer;
+        z-index: 20;
+        transition: background 0.15s ease;
+      }
+      .cal-weekend-hidden-indicator:hover {
+        background: rgba(251, 191, 36, 0.22);
+      }
+      .cal-weekend-hidden-count {
+        writing-mode: horizontal-tb;
+        min-width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: var(--amber);
+        color: var(--bg-surface);
+        font-size: 10px;
+        font-weight: 700;
       }
       .cal-header-row {
         display: grid;

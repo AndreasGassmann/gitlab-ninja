@@ -54,6 +54,36 @@ export async function setTimeEstimate(
 }
 
 /**
+ * Set (or clear, with null) the due date on an issue.
+ * dueDate is 'YYYY-MM-DD'; an empty string clears it on the REST API.
+ */
+export async function setDueDate(
+  projectPath: string,
+  issueIid: string,
+  dueDate: string | null
+): Promise<boolean> {
+  const csrfToken = getCsrfToken();
+  const encodedPath = encodeURIComponent(projectPath);
+
+  const response = await fetch(`/api/v4/projects/${encodedPath}/issues/${issueIid}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ due_date: dueDate ?? '' }),
+  });
+
+  if (!response.ok) {
+    debugError(`GitLab Ninja: Failed to set due date: ${response.status}`);
+    return false;
+  }
+
+  debugLog(`GitLab Ninja: Set due date to ${dueDate ?? '(cleared)'} on #${issueIid}`);
+  return true;
+}
+
+/**
  * Resolve an issue's global ID (gid://gitlab/Issue/NNN) from project path + IID.
  */
 async function resolveIssueGid(
@@ -130,6 +160,73 @@ export async function addTimeSpent(
 
   debugLog(`GitLab Ninja: Added ${duration} spent on #${issueIid}`);
   return true;
+}
+
+/**
+ * Issue + project details needed to stage a draft timelog from a board card.
+ */
+export interface IssueDraftInfo {
+  issueGid: string;
+  issueIid: number;
+  issueTitle: string;
+  issueUrl: string;
+  issueState: string;
+  timeEstimate: number; // seconds
+  totalTimeSpent: number; // seconds
+  projectId: string;
+  projectName: string;
+}
+
+export async function fetchIssueDraftInfo(
+  projectPath: string,
+  issueIid: string
+): Promise<IssueDraftInfo | null> {
+  const csrfToken = getCsrfToken();
+  const query = `query {
+    project(fullPath: "${projectPath}") {
+      id
+      name
+      issue(iid: "${issueIid}") {
+        id
+        title
+        webUrl
+        state
+        timeEstimate
+        totalTimeSpent
+      }
+    }
+  }`;
+
+  const response = await fetch('/api/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    debugError(`GitLab Ninja: Failed to fetch issue details: ${response.status}`);
+    return null;
+  }
+
+  const data = await response.json();
+  const project = data?.data?.project;
+  const issue = project?.issue;
+  if (!project || !issue) return null;
+
+  return {
+    issueGid: issue.id,
+    issueIid: parseInt(issueIid, 10),
+    issueTitle: issue.title,
+    issueUrl: issue.webUrl,
+    issueState: issue.state || 'opened',
+    timeEstimate: issue.timeEstimate || 0,
+    totalTimeSpent: issue.totalTimeSpent || 0,
+    projectId: project.id,
+    projectName: project.name || '',
+  };
 }
 
 /**

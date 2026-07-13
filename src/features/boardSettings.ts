@@ -5,6 +5,9 @@
 
 import { debugLog } from '../utils/debug';
 import { getWorkSettings } from '../utils/workSettings';
+import { DraftManager } from '../utils/timelogDrafts';
+import { BoardSortFeature } from './boardSort';
+import { SORT_MODES, SortMode } from '../utils/cardSort';
 
 export type SettingsChangeCallback = (settings: BoardSettingsState) => void;
 
@@ -19,9 +22,17 @@ export class BoardSettingsFeature {
   private state: BoardSettingsState;
   private onChange: SettingsChangeCallback;
   private refreshTimer: number | null = null;
+  private draftsReady: Promise<DraftManager> | null = null;
+  private sortFeature: BoardSortFeature | null = null;
 
-  constructor(onChange: SettingsChangeCallback) {
+  constructor(
+    onChange: SettingsChangeCallback,
+    draftsReady?: Promise<DraftManager>,
+    sortFeature?: BoardSortFeature
+  ) {
     this.onChange = onChange;
+    this.draftsReady = draftsReady || null;
+    this.sortFeature = sortFeature || null;
     this.state = this.loadState();
   }
 
@@ -63,7 +74,38 @@ export class BoardSettingsFeature {
     // Refresh every 60 seconds
     this.refreshTimer = window.setInterval(() => this.fetchTodayLogged(), 60000);
 
+    // Show pending draft timelogs (staged locally, not yet sent to GitLab)
+    this.initDraftIndicator();
+
     debugLog('GitLab Ninja: Settings toolbar inserted');
+  }
+
+  private async initDraftIndicator(): Promise<void> {
+    if (!this.draftsReady) return;
+    let drafts: DraftManager;
+    try {
+      drafts = await this.draftsReady;
+    } catch {
+      return;
+    }
+    this.updateDraftIndicator(drafts);
+    // Re-render whenever any context (this page, options page) stages/commits.
+    drafts.watch(() => this.updateDraftIndicator(drafts));
+  }
+
+  private updateDraftIndicator(drafts: DraftManager): void {
+    const chip = this.container?.querySelector<HTMLElement>('.gn-draft-indicator');
+    if (!chip) return;
+    // Pending drafts normally only exist while draft mode is on, but leftovers
+    // from a partially failed commit should stay visible either way.
+    const count = drafts.pendingCount();
+    if (count === 0) {
+      chip.style.display = 'none';
+      return;
+    }
+    chip.style.display = '';
+    chip.textContent = `${count} draft${count === 1 ? '' : 's'}`;
+    chip.title = `${count} staged timelog change${count === 1 ? '' : 's'} — open time planning to review & commit`;
   }
 
   private renderHTML(): string {
@@ -74,8 +116,14 @@ export class BoardSettingsFeature {
             <span class="gn-pill-dot"></span>
             <span>Auto-assign</span>
           </button>
+          <label class="gn-sort-control" title="Display-only sort; drag positions still save">
+            <span class="gn-sort-label">Sort</span>
+            <select class="gn-sort-select">${this.renderSortOptions()}</select>
+            <button type="button" class="gn-sort-dir" title="Toggle sort direction"></button>
+          </label>
         </div>
         <div class="gn-toolbar-status">
+          <button class="gn-draft-indicator" type="button" style="display:none"></button>
           <div class="gn-daily-progress">
             <span class="gn-daily-label">Today</span>
             <div class="gn-daily-bar">
@@ -86,6 +134,14 @@ export class BoardSettingsFeature {
         </div>
       </div>
     `;
+  }
+
+  private renderSortOptions(): string {
+    const current = this.sortFeature?.getMode() ?? 'original';
+    return SORT_MODES.map(
+      (m) =>
+        `<option value="${m.value}"${m.value === current ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
   }
 
   private async fetchTodayLogged(): Promise<void> {
@@ -197,6 +253,45 @@ export class BoardSettingsFeature {
       this.saveState();
       this.onChange(this.state);
     });
+
+    // Draft chip opens the time-planning view where drafts are reviewed/committed
+    this.container.querySelector('.gn-draft-indicator')?.addEventListener('click', () => {
+      window.open(chrome.runtime.getURL('options.html'));
+    });
+
+    const sortSelect = this.container.querySelector<HTMLSelectElement>('.gn-sort-select');
+    const sortDirBtn = this.container.querySelector<HTMLButtonElement>('.gn-sort-dir');
+    if (sortSelect && sortDirBtn && this.sortFeature) {
+      const sortFeature = this.sortFeature;
+      const syncDirButton = () => {
+        const mode = sortFeature.getMode();
+        const dir = sortFeature.getDirection();
+        sortDirBtn.textContent = dir === 'asc' ? '↑' : '↓';
+        sortDirBtn.disabled = mode === 'original';
+        sortDirBtn.title =
+          mode === 'dueDate'
+            ? dir === 'asc'
+              ? 'Soonest first (overdue → today → future)'
+              : 'Latest first'
+            : dir === 'asc'
+              ? 'Smallest first'
+              : 'Largest first';
+      };
+      sortSelect.addEventListener('change', () => {
+        sortFeature.setMode(sortSelect.value as SortMode);
+        syncDirButton();
+      });
+      sortDirBtn.addEventListener('click', () => {
+        sortFeature.toggleDirection();
+        syncDirButton();
+      });
+      // The toolbar can render before the persisted mode has loaded
+      sortFeature.ready.then(() => {
+        sortSelect.value = sortFeature.getMode();
+        syncDirButton();
+      });
+      syncDirButton();
+    }
   }
 
   private loadState(): BoardSettingsState {

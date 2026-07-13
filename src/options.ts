@@ -13,6 +13,7 @@ import {
 } from './utils/themeManager';
 import {
   DraftManager,
+  draftScope,
   applyDrafts,
   buildPlan,
   parseDurationToSeconds,
@@ -20,6 +21,8 @@ import {
   DraftStatus,
   DraftDesired,
   PlanItem,
+  CommitResult,
+  commitPlan,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
 import {
@@ -1229,6 +1232,16 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
   const visibleDays = hideWeekends ? days.filter((_, i) => !weekendDays.includes(i)) : days;
   const dayCols = visibleDays.length;
 
+  // Logs on hidden weekend days — surface them so "hide weekends" can't
+  // silently swallow entries (e.g. one logged on Saturday).
+  const hiddenWeekendLogs = hideWeekends
+    ? days
+        .filter((_, i) => weekendDays.includes(i))
+        .flatMap((d) =>
+          (byDate.get(localDateStr(d)) || []).filter((l) => l.draftStatus !== 'deleted')
+        )
+    : [];
+
   // Day headers & columns
   let dayHeadersHtml = '<div class="cal-time-header"></div>';
   let dayColumnsHtml = '';
@@ -1322,6 +1335,16 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
         <div class="cal-time-column" style="height:${totalHeight}px">${timeLabelsHtml}</div>
         <div class="cal-days-container" style="grid-template-columns:repeat(${dayCols},1fr)">${dayColumnsHtml}</div>
       </div>
+      ${
+        hiddenWeekendLogs.length > 0
+          ? `<button type="button" class="cal-weekend-hidden-indicator" title="Click to show weekends">
+              <span class="cal-weekend-hidden-count">${hiddenWeekendLogs.length}</span>
+              <span class="cal-weekend-hidden-label">on weekend · ${formatDuration(
+                hiddenWeekendLogs.reduce((s, l) => s + l.timeSpent, 0)
+              )}</span>
+            </button>`
+          : ''
+      }
     </div>
   `;
 
@@ -1355,6 +1378,13 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
       renderCalendarWeek(days, timelogs, entries);
     });
   }
+
+  // Hidden-weekend indicator: clicking reveals the weekend columns
+  content.querySelector('.cal-weekend-hidden-indicator')?.addEventListener('click', () => {
+    hideWeekends = false;
+    chrome.storage.sync.set({ hideWeekends });
+    renderCalendarWeek(days, timelogs, entries);
+  });
 }
 
 // Shows a small floating badge at the top/bottom of each day column counting
@@ -2411,7 +2441,15 @@ function getDisplayData(): { timelogs: DisplayTimelog[]; entries: WeeklyTimelog[
   const eff = applyDrafts(cachedTimelogs, drafts.state);
   const nonDeleted = eff.filter((e) => e.draftStatus !== 'deleted');
   const { entries } = aggregateTimelogs(nonDeleted, rangeStartKey, rangeEndKey);
-  return { timelogs: eff, entries };
+  // Clamp the display list to the viewed range: an entry dragged into another
+  // week belongs to that week's view, not this one's.
+  const timelogs = rangeStartKey
+    ? eff.filter((e) => {
+        const k = getDateFromSpentAt(e.spentAt);
+        return k >= rangeStartKey && k < rangeEndKey;
+      })
+    : eff;
+  return { timelogs, entries };
 }
 
 // Re-render the current view from cache + drafts WITHOUT hitting the network.
@@ -2440,8 +2478,11 @@ async function routeEdit(
     if (isDraftId(log.id)) {
       drafts.editAdded(log.id, { timeSpent, spentAt, note });
     } else {
-      const orig = cachedTimelogs.find((t) => t.id === log.id);
-      if (orig) drafts.editOriginal(orig, { timeSpent, spentAt, note });
+      // Fall back to the display log for entries moved into this range from
+      // another week — their original isn't in this range's fetch, but a
+      // byOrigin draft already exists, so editOriginal just patches it.
+      const orig = cachedTimelogs.find((t) => t.id === log.id) || log;
+      drafts.editOriginal(orig, { timeSpent, spentAt, note });
     }
     renderCurrentView();
     return true;
@@ -2473,8 +2514,8 @@ async function routeDelete(log: DisplayTimelog): Promise<boolean> {
   if (drafts.isEnabled()) {
     if (isDraftId(log.id)) drafts.deleteAdded(log.id);
     else {
-      const orig = cachedTimelogs.find((t) => t.id === log.id);
-      if (orig) drafts.deleteOriginal(orig);
+      const orig = cachedTimelogs.find((t) => t.id === log.id) || log;
+      drafts.deleteOriginal(orig);
     }
     renderCurrentView();
     return true;
@@ -2521,8 +2562,8 @@ async function routeSplit(log: DisplayTimelog): Promise<boolean> {
     drafts.addNew({ ...base, timeSpent: secondHalf, spentAt: secondSpentAt });
     if (isDraftId(log.id)) drafts.deleteAdded(log.id);
     else {
-      const orig = cachedTimelogs.find((t) => t.id === log.id);
-      if (orig) drafts.deleteOriginal(orig);
+      const orig = cachedTimelogs.find((t) => t.id === log.id) || log;
+      drafts.deleteOriginal(orig);
     }
     renderCurrentView();
     return true;
@@ -2699,54 +2740,13 @@ async function showCommitPreview(): Promise<void> {
   });
 }
 
-interface CommitResult {
-  ok: number;
-  failed: { item: PlanItem; error: string }[];
-  dupes: PlanItem[]; // created but old copy could not be deleted
-}
-
 async function commitDrafts(): Promise<CommitResult> {
-  const plan = buildPlan(drafts.state);
-  const result: CommitResult = { ok: 0, failed: [], dupes: [] };
-  for (const item of plan) {
-    try {
-      if (item.kind === 'add') {
-        await createTimelog(
-          item.desired.issueGid,
-          formatDurationInput(item.desired.timeSpent),
-          item.desired.spentAt,
-          item.desired.note
-        );
-        drafts.clear(item);
-        result.ok++;
-      } else if (item.kind === 'delete') {
-        await deleteTimelog(item.originId!);
-        drafts.clear(item);
-        result.ok++;
-      } else {
-        // modify: create the new entry first, then remove the old one.
-        await createTimelog(
-          item.desired.issueGid,
-          formatDurationInput(item.desired.timeSpent),
-          item.desired.spentAt,
-          item.desired.note
-        );
-        try {
-          await deleteTimelog(item.originId!);
-          drafts.clear(item);
-          result.ok++;
-        } catch {
-          // New entry exists but the old one survives → duplicate. Clear the
-          // draft so a re-commit won't create yet another copy; flag it.
-          drafts.clear(item);
-          result.dupes.push(item);
-        }
-      }
-    } catch (err: any) {
-      result.failed.push({ item, error: err?.message || String(err) });
-    }
-  }
-  return result;
+  return commitPlan(buildPlan(drafts.state), {
+    createTimelog,
+    deleteTimelog,
+    formatDuration: formatDurationInput,
+    clear: (item) => drafts.clear(item),
+  });
 }
 
 function showCommitSummary(r: CommitResult): void {
@@ -3396,8 +3396,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await detectGitlabUrl();
 
-  // Draft mode: scope staged edits per gitlab instance + user.
-  drafts.init(`${gitlabUrl || 'default'}|${username || ''}`);
+  // Draft mode: scope staged edits per gitlab instance + user. Shared via
+  // chrome.storage.local so the boards content script sees the same state.
+  await drafts.initShared(draftScope(gitlabUrl, username));
+  drafts.watch(() => {
+    // Another context (e.g. the boards view) staged a change — re-render.
+    if (rangeStartKey) renderCurrentView();
+    else updateDraftUI();
+  });
   initDraftControls();
 
   // Load theme mode and custom colors
