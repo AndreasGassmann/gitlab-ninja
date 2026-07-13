@@ -12,6 +12,7 @@ import { TimeTrackingFeature } from './features/timeTracking';
 import { ColumnSummaryFeature } from './features/columnSummary';
 import { TimeEstimateModalFeature } from './features/timeEstimateModal';
 import { BoardSettingsFeature } from './features/boardSettings';
+import { BoardSortFeature } from './features/boardSort';
 import { EditModeFeature } from './features/editMode';
 import { NewIssueEstimateFeature } from './features/newIssueEstimate';
 import { BoardRecentProjectsFeature } from './features/boardRecentProjects';
@@ -157,6 +158,7 @@ class GitLabNinja {
   private columnSummaryFeature: ColumnSummaryFeature;
   private timeEstimateModalFeature: TimeEstimateModalFeature;
   private boardSettingsFeature: BoardSettingsFeature;
+  private boardSortFeature: BoardSortFeature;
   private editModeFeature: EditModeFeature;
   private newIssueEstimateFeature: NewIssueEstimateFeature;
   private boardRecentProjectsFeature: BoardRecentProjectsFeature;
@@ -172,12 +174,17 @@ class GitLabNinja {
     this.editModeFeature.setOnRefresh(() => this.enhanceAllFeatures());
     this.newIssueEstimateFeature = new NewIssueEstimateFeature(eventNonce);
     this.boardRecentProjectsFeature = new BoardRecentProjectsFeature(eventNonce);
-    this.boardSettingsFeature = new BoardSettingsFeature((settings) => {
-      // Toggle auto-assign
-      if (this.autoAssignFeature) {
-        this.autoAssignFeature.setEnabled(settings.autoAssign);
-      }
-    }, timelogDraftsReady);
+    this.boardSortFeature = new BoardSortFeature();
+    this.boardSettingsFeature = new BoardSettingsFeature(
+      (settings) => {
+        // Toggle auto-assign
+        if (this.autoAssignFeature) {
+          this.autoAssignFeature.setEnabled(settings.autoAssign);
+        }
+      },
+      timelogDraftsReady,
+      this.boardSortFeature
+    );
   }
 
   /**
@@ -239,6 +246,7 @@ class GitLabNinja {
     this.timeTrackingFeature.enhanceCards();
     this.columnSummaryFeature.updateSummaries();
     this.editModeFeature.enhanceCards();
+    this.boardSortFeature.applySort();
   }
 
   /**
@@ -306,6 +314,7 @@ class GitLabNinja {
     }
 
     this.boardSettingsFeature.destroy();
+    this.boardSortFeature.destroy();
     this.editModeFeature.destroy();
     this.newIssueEstimateFeature.destroy();
 

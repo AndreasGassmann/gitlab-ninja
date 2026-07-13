@@ -6,6 +6,8 @@
 import { debugLog } from '../utils/debug';
 import { getWorkSettings } from '../utils/workSettings';
 import { DraftManager } from '../utils/timelogDrafts';
+import { BoardSortFeature } from './boardSort';
+import { SORT_MODES, SortMode } from '../utils/cardSort';
 
 export type SettingsChangeCallback = (settings: BoardSettingsState) => void;
 
@@ -21,10 +23,16 @@ export class BoardSettingsFeature {
   private onChange: SettingsChangeCallback;
   private refreshTimer: number | null = null;
   private draftsReady: Promise<DraftManager> | null = null;
+  private sortFeature: BoardSortFeature | null = null;
 
-  constructor(onChange: SettingsChangeCallback, draftsReady?: Promise<DraftManager>) {
+  constructor(
+    onChange: SettingsChangeCallback,
+    draftsReady?: Promise<DraftManager>,
+    sortFeature?: BoardSortFeature
+  ) {
     this.onChange = onChange;
     this.draftsReady = draftsReady || null;
+    this.sortFeature = sortFeature || null;
     this.state = this.loadState();
   }
 
@@ -108,6 +116,10 @@ export class BoardSettingsFeature {
             <span class="gn-pill-dot"></span>
             <span>Auto-assign</span>
           </button>
+          <label class="gn-sort-control" title="Display-only sort; drag positions still save">
+            <span class="gn-sort-label">Sort</span>
+            <select class="gn-sort-select">${this.renderSortOptions()}</select>
+          </label>
         </div>
         <div class="gn-toolbar-status">
           <button class="gn-draft-indicator" type="button" style="display:none"></button>
@@ -121,6 +133,14 @@ export class BoardSettingsFeature {
         </div>
       </div>
     `;
+  }
+
+  private renderSortOptions(): string {
+    const current = this.sortFeature?.getMode() ?? 'original';
+    return SORT_MODES.map(
+      (m) =>
+        `<option value="${m.value}"${m.value === current ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
   }
 
   private async fetchTodayLogged(): Promise<void> {
@@ -237,6 +257,18 @@ export class BoardSettingsFeature {
     this.container.querySelector('.gn-draft-indicator')?.addEventListener('click', () => {
       window.open(chrome.runtime.getURL('options.html'));
     });
+
+    const sortSelect = this.container.querySelector<HTMLSelectElement>('.gn-sort-select');
+    if (sortSelect && this.sortFeature) {
+      const sortFeature = this.sortFeature;
+      sortSelect.addEventListener('change', () => {
+        sortFeature.setMode(sortSelect.value as SortMode);
+      });
+      // The toolbar can render before the persisted mode has loaded
+      sortFeature.ready.then(() => {
+        sortSelect.value = sortFeature.getMode();
+      });
+    }
   }
 
   private loadState(): BoardSettingsState {

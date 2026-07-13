@@ -368,6 +368,32 @@ li.board-card.gn-effort-xl {
   box-shadow: 0 0 6px rgba(99, 102, 241, 0.5);
 }
 
+/* Board sort control */
+.gn-sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gn-sort-label {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--gn-font);
+  color: var(--gn-grey-500);
+}
+
+.gn-sort-select {
+  padding: 4px 8px;
+  border: 1px solid var(--gn-grey-300);
+  border-radius: var(--gn-radius);
+  background: var(--gn-grey-50);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--gn-font);
+  color: var(--gn-grey-700);
+  cursor: pointer;
+}
+
 /* Pending draft timelogs indicator */
 .gn-draft-indicator {
   display: inline-flex;
@@ -1272,7 +1298,8 @@ div.board-card.gn-has-edit-controls {
 }
 
 .gl-dark .gn-date-picker,
-.gl-dark .gn-time-picker {
+.gl-dark .gn-time-picker,
+.gl-dark .gn-sort-select {
   background: #252536;
   border-color: #414158;
   color: #c5c5da;
@@ -1463,7 +1490,8 @@ div.board-card.gn-has-edit-controls {
 }
 
 .gn-force-dark .gn-date-picker,
-.gn-force-dark .gn-time-picker {
+.gn-force-dark .gn-time-picker,
+.gn-force-dark .gn-sort-select {
   background: #252536;
   border-color: #414158;
   color: #c5c5da;
@@ -1647,7 +1675,8 @@ div.board-card.gn-has-edit-controls {
 }
 
 .gn-force-light .gn-date-picker,
-.gn-force-light .gn-time-picker {
+.gn-force-light .gn-time-picker,
+.gn-force-light .gn-sort-select {
   background: #f8f9fa;
   border-color: #dee2e6;
   color: #495057;
