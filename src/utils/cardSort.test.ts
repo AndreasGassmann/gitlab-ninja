@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { compareCards, CardSortData, SortMode } from './cardSort';
+import { compareCards, CardSortData, SortMode, SortDirection } from './cardSort';
 
 function card(overrides: Partial<CardSortData> & { originalIndex: number }): CardSortData {
   return { dueDate: null, estimate: 0, spent: 0, ...overrides };
 }
 
-function sortBy(cards: CardSortData[], mode: SortMode): number[] {
-  return [...cards].sort((a, b) => compareCards(a, b, mode)).map((c) => c.originalIndex);
+function sortBy(cards: CardSortData[], mode: SortMode, direction: SortDirection = 'asc'): number[] {
+  return [...cards]
+    .sort((a, b) => compareCards(a, b, mode, direction))
+    .map((c) => c.originalIndex);
 }
 
 describe('compareCards', () => {
@@ -36,23 +38,38 @@ describe('compareCards', () => {
     expect(sortBy(cards, 'dueDate')).toEqual([0, 1]);
   });
 
-  it('estimate sorts descending with zeros last', () => {
+  it('estimate desc puts largest first, zeros last', () => {
     const cards = [
       card({ originalIndex: 0, estimate: 0 }),
       card({ originalIndex: 1, estimate: 2 }),
       card({ originalIndex: 2, estimate: 8 }),
     ];
-    expect(sortBy(cards, 'estimate')).toEqual([2, 1, 0]);
+    expect(sortBy(cards, 'estimate', 'desc')).toEqual([2, 1, 0]);
+    expect(sortBy(cards, 'estimate', 'asc')).toEqual([1, 2, 0]);
   });
 
-  it('spent sorts descending with zeros last and ties by original order', () => {
+  it('spent desc puts largest first, zeros last, ties by original order', () => {
     const cards = [
       card({ originalIndex: 3, spent: 0 }),
       card({ originalIndex: 2, spent: 4 }),
       card({ originalIndex: 1, spent: 4 }),
       card({ originalIndex: 0, spent: 0 }),
     ];
-    expect(sortBy(cards, 'spent')).toEqual([1, 2, 0, 3]);
+    expect(sortBy(cards, 'spent', 'desc')).toEqual([1, 2, 0, 3]);
+  });
+
+  it('dueDate desc puts latest first, nulls still last', () => {
+    const cards = [
+      card({ originalIndex: 0, dueDate: null }),
+      card({ originalIndex: 1, dueDate: '2026-08-01' }),
+      card({ originalIndex: 2, dueDate: '2026-07-15' }),
+    ];
+    expect(sortBy(cards, 'dueDate', 'desc')).toEqual([1, 2, 0]);
+  });
+
+  it('direction does not affect original mode', () => {
+    const cards = [card({ originalIndex: 1 }), card({ originalIndex: 0 })];
+    expect(sortBy(cards, 'original', 'desc')).toEqual([0, 1]);
   });
 
   it('sorts a mixed set per mode', () => {
@@ -64,7 +81,7 @@ describe('compareCards', () => {
     ];
     expect(sortBy(cards, 'original')).toEqual([0, 1, 2, 3]);
     expect(sortBy(cards, 'dueDate')).toEqual([2, 1, 3, 0]);
-    expect(sortBy(cards, 'estimate')).toEqual([2, 0, 3, 1]);
-    expect(sortBy(cards, 'spent')).toEqual([1, 3, 0, 2]);
+    expect(sortBy(cards, 'estimate', 'desc')).toEqual([2, 0, 3, 1]);
+    expect(sortBy(cards, 'spent', 'desc')).toEqual([1, 3, 0, 2]);
   });
 });

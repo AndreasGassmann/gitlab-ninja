@@ -119,6 +119,7 @@ export class BoardSettingsFeature {
           <label class="gn-sort-control" title="Display-only sort; drag positions still save">
             <span class="gn-sort-label">Sort</span>
             <select class="gn-sort-select">${this.renderSortOptions()}</select>
+            <button type="button" class="gn-sort-dir" title="Toggle sort direction"></button>
           </label>
         </div>
         <div class="gn-toolbar-status">
@@ -259,15 +260,37 @@ export class BoardSettingsFeature {
     });
 
     const sortSelect = this.container.querySelector<HTMLSelectElement>('.gn-sort-select');
-    if (sortSelect && this.sortFeature) {
+    const sortDirBtn = this.container.querySelector<HTMLButtonElement>('.gn-sort-dir');
+    if (sortSelect && sortDirBtn && this.sortFeature) {
       const sortFeature = this.sortFeature;
+      const syncDirButton = () => {
+        const mode = sortFeature.getMode();
+        const dir = sortFeature.getDirection();
+        sortDirBtn.textContent = dir === 'asc' ? '↑' : '↓';
+        sortDirBtn.disabled = mode === 'original';
+        sortDirBtn.title =
+          mode === 'dueDate'
+            ? dir === 'asc'
+              ? 'Soonest first (overdue → today → future)'
+              : 'Latest first'
+            : dir === 'asc'
+              ? 'Smallest first'
+              : 'Largest first';
+      };
       sortSelect.addEventListener('change', () => {
         sortFeature.setMode(sortSelect.value as SortMode);
+        syncDirButton();
+      });
+      sortDirBtn.addEventListener('click', () => {
+        sortFeature.toggleDirection();
+        syncDirButton();
       });
       // The toolbar can render before the persisted mode has loaded
       sortFeature.ready.then(() => {
         sortSelect.value = sortFeature.getMode();
+        syncDirButton();
       });
+      syncDirButton();
     }
   }
 

@@ -6,7 +6,14 @@
  */
 
 import { extractIssueCacheKey, getCachedTimeTracking } from '../utils/api';
-import { compareCards, CardSortData, SortMode, SORT_MODES } from '../utils/cardSort';
+import {
+  compareCards,
+  CardSortData,
+  SortMode,
+  SortDirection,
+  SORT_MODES,
+  DEFAULT_DIRECTIONS,
+} from '../utils/cardSort';
 
 const STORAGE_KEY = 'gnBoardSortModes';
 
@@ -16,6 +23,7 @@ function isSortMode(value: unknown): value is SortMode {
 
 export class BoardSortFeature {
   private mode: SortMode = 'original';
+  private direction: SortDirection = 'asc';
   /** cacheKey → first-seen document order; survives GitLab recreating card nodes */
   private origIndexByKey = new Map<string, number>();
   private nextOrigIndex = 0;
@@ -34,8 +42,20 @@ export class BoardSortFeature {
 
   public setMode(mode: SortMode): void {
     this.mode = mode;
+    this.direction = DEFAULT_DIRECTIONS[mode];
     this.saveMode();
     this.applySort();
+  }
+
+  public getDirection(): SortDirection {
+    return this.direction;
+  }
+
+  public toggleDirection(): SortDirection {
+    this.direction = this.direction === 'asc' ? 'desc' : 'asc';
+    this.saveMode();
+    this.applySort();
+    return this.direction;
   }
 
   /**
@@ -93,7 +113,9 @@ export class BoardSortFeature {
       return { card, data };
     });
 
-    const sorted = [...entries].sort((a, b) => compareCards(a.data, b.data, this.mode));
+    const sorted = [...entries].sort((a, b) =>
+      compareCards(a.data, b.data, this.mode, this.direction)
+    );
 
     // No-op guard: leaving an already-ordered column alone is what stops the
     // observer → enhance → applySort feedback loop.
@@ -110,7 +132,20 @@ export class BoardSortFeature {
       chrome.storage.local.get(STORAGE_KEY, (result) => {
         const modes = result?.[STORAGE_KEY] as Record<string, unknown> | undefined;
         const stored = modes?.[window.location.pathname];
-        if (isSortMode(stored)) this.mode = stored;
+        // Legacy format stored the bare mode string, without direction
+        if (isSortMode(stored)) {
+          this.mode = stored;
+          this.direction = DEFAULT_DIRECTIONS[stored];
+        } else if (stored && typeof stored === 'object') {
+          const { mode, direction } = stored as { mode?: unknown; direction?: unknown };
+          if (isSortMode(mode)) {
+            this.mode = mode;
+            this.direction =
+              direction === 'asc' || direction === 'desc'
+                ? direction
+                : DEFAULT_DIRECTIONS[mode];
+          }
+        }
         resolve();
       });
     });
@@ -118,8 +153,10 @@ export class BoardSortFeature {
 
   private saveMode(): void {
     chrome.storage.local.get(STORAGE_KEY, (result) => {
-      const modes = (result?.[STORAGE_KEY] as Record<string, SortMode>) || {};
-      modes[window.location.pathname] = this.mode;
+      const modes =
+        (result?.[STORAGE_KEY] as Record<string, { mode: SortMode; direction: SortDirection }>) ||
+        {};
+      modes[window.location.pathname] = { mode: this.mode, direction: this.direction };
       chrome.storage.local.set({ [STORAGE_KEY]: modes });
     });
   }
