@@ -1232,6 +1232,16 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
   const visibleDays = hideWeekends ? days.filter((_, i) => !weekendDays.includes(i)) : days;
   const dayCols = visibleDays.length;
 
+  // Logs on hidden weekend days — surface them so "hide weekends" can't
+  // silently swallow entries (e.g. one logged on Saturday).
+  const hiddenWeekendLogs = hideWeekends
+    ? days
+        .filter((_, i) => weekendDays.includes(i))
+        .flatMap((d) =>
+          (byDate.get(localDateStr(d)) || []).filter((l) => l.draftStatus !== 'deleted')
+        )
+    : [];
+
   // Day headers & columns
   let dayHeadersHtml = '<div class="cal-time-header"></div>';
   let dayColumnsHtml = '';
@@ -1325,6 +1335,16 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
         <div class="cal-time-column" style="height:${totalHeight}px">${timeLabelsHtml}</div>
         <div class="cal-days-container" style="grid-template-columns:repeat(${dayCols},1fr)">${dayColumnsHtml}</div>
       </div>
+      ${
+        hiddenWeekendLogs.length > 0
+          ? `<button type="button" class="cal-weekend-hidden-indicator" title="Click to show weekends">
+              <span class="cal-weekend-hidden-count">${hiddenWeekendLogs.length}</span>
+              <span class="cal-weekend-hidden-label">on weekend · ${formatDuration(
+                hiddenWeekendLogs.reduce((s, l) => s + l.timeSpent, 0)
+              )}</span>
+            </button>`
+          : ''
+      }
     </div>
   `;
 
@@ -1358,6 +1378,13 @@ function renderCalendarWeek(days: Date[], timelogs: DisplayTimelog[], entries: W
       renderCalendarWeek(days, timelogs, entries);
     });
   }
+
+  // Hidden-weekend indicator: clicking reveals the weekend columns
+  content.querySelector('.cal-weekend-hidden-indicator')?.addEventListener('click', () => {
+    hideWeekends = false;
+    chrome.storage.sync.set({ hideWeekends });
+    renderCalendarWeek(days, timelogs, entries);
+  });
 }
 
 // Shows a small floating badge at the top/bottom of each day column counting
