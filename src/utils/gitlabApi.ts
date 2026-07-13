@@ -133,6 +133,73 @@ export async function addTimeSpent(
 }
 
 /**
+ * Issue + project details needed to stage a draft timelog from a board card.
+ */
+export interface IssueDraftInfo {
+  issueGid: string;
+  issueIid: number;
+  issueTitle: string;
+  issueUrl: string;
+  issueState: string;
+  timeEstimate: number; // seconds
+  totalTimeSpent: number; // seconds
+  projectId: string;
+  projectName: string;
+}
+
+export async function fetchIssueDraftInfo(
+  projectPath: string,
+  issueIid: string
+): Promise<IssueDraftInfo | null> {
+  const csrfToken = getCsrfToken();
+  const query = `query {
+    project(fullPath: "${projectPath}") {
+      id
+      name
+      issue(iid: "${issueIid}") {
+        id
+        title
+        webUrl
+        state
+        timeEstimate
+        totalTimeSpent
+      }
+    }
+  }`;
+
+  const response = await fetch('/api/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    debugError(`GitLab Ninja: Failed to fetch issue details: ${response.status}`);
+    return null;
+  }
+
+  const data = await response.json();
+  const project = data?.data?.project;
+  const issue = project?.issue;
+  if (!project || !issue) return null;
+
+  return {
+    issueGid: issue.id,
+    issueIid: parseInt(issueIid, 10),
+    issueTitle: issue.title,
+    issueUrl: issue.webUrl,
+    issueState: issue.state || 'opened',
+    timeEstimate: issue.timeEstimate || 0,
+    totalTimeSpent: issue.totalTimeSpent || 0,
+    projectId: project.id,
+    projectName: project.name || '',
+  };
+}
+
+/**
  * Timelog entry returned by GitLab GraphQL
  */
 export interface Timelog {

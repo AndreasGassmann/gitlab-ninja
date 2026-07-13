@@ -15,10 +15,19 @@ import {
   getCachedTimeTracking,
   cacheTimeTracking,
 } from '../utils/api';
-import { extractProjectPath, setTimeEstimate, addTimeSpent, formatDate, fetchTimelogs, Timelog } from '../utils/gitlabApi';
+import {
+  extractProjectPath,
+  setTimeEstimate,
+  addTimeSpent,
+  formatDate,
+  fetchTimelogs,
+  fetchIssueDraftInfo,
+  Timelog,
+} from '../utils/gitlabApi';
 import { formatHours } from '../utils/time';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
 import { getWorkSettings } from '../utils/workSettings';
+import { DraftManager, DraftEntry, parseDurationToSeconds } from '../utils/timelogDrafts';
 
 const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -51,9 +60,23 @@ function stopBubble(e: Event): void {
 
 export class EditModeFeature {
   private onRefresh: (() => void) | null = null;
+  private draftsReady: Promise<DraftManager> | null = null;
+
+  constructor(draftsReady?: Promise<DraftManager>) {
+    this.draftsReady = draftsReady || null;
+  }
 
   public setOnRefresh(cb: () => void): void {
     this.onRefresh = cb;
+  }
+
+  private async getDrafts(): Promise<DraftManager | null> {
+    if (!this.draftsReady) return null;
+    try {
+      return await this.draftsReady;
+    } catch {
+      return null;
+    }
   }
 
   public enhanceCards(): void {
@@ -388,6 +411,17 @@ export class EditModeFeature {
     summaryInput.addEventListener('focus', stopBubble);
     summaryInput.addEventListener('keydown', (e) => e.stopPropagation());
 
+    // Draft mode stages the log locally instead of sending it — relabel the
+    // button once the shared draft state has loaded.
+    let submitLabel = 'Log';
+    this.getDrafts().then((d) => {
+      if (d?.isEnabled() && controls.isConnected) {
+        submitLabel = 'Draft';
+        if (submitBtn.textContent === 'Log') submitBtn.textContent = 'Draft';
+        submitBtn.title = 'Draft mode is on — stages this log until you commit it';
+      }
+    });
+
     // Submit
     submitBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -402,6 +436,19 @@ export class EditModeFeature {
       submitBtn.textContent = '...';
 
       const spentAt = selectedTime ? `${selectedDate}T${selectedTime}:00` : selectedDate;
+
+      const drafts = await this.getDrafts();
+      if (drafts?.isEnabled()) {
+        const ok = await this.stageDraft(projectPath, iid, selectedSpent, summary, spentAt, drafts);
+        if (ok) {
+          this.refreshCard(card);
+        } else {
+          submitBtn.textContent = submitLabel;
+          submitBtn.disabled = false;
+        }
+        return;
+      }
+
       const ok = await addTimeSpent(
         projectPath,
         extractIidFromCacheKey(iid),
@@ -415,13 +462,45 @@ export class EditModeFeature {
         cacheTimeTracking(iid, { ...existing, spent: existing.spent + hours });
         this.refreshCard(card);
       } else {
-        submitBtn.textContent = 'Log';
+        submitBtn.textContent = submitLabel;
         submitBtn.disabled = false;
       }
     });
 
     // Fetch and render timelogs
     this.loadTimelogs(controls, card, iid);
+  }
+
+  /**
+   * Stage a timelog as a local draft instead of creating it in GitLab.
+   * Fetches the issue details the draft needs (gid, estimate, project ids).
+   */
+  private async stageDraft(
+    projectPath: string,
+    iid: string,
+    durationStr: string,
+    summary: string | undefined,
+    spentAt: string,
+    drafts: DraftManager
+  ): Promise<boolean> {
+    const timeSpent = parseDurationToSeconds(durationStr);
+    if (timeSpent <= 0) return false;
+    const info = await fetchIssueDraftInfo(projectPath, extractIidFromCacheKey(iid));
+    if (!info) return false;
+    drafts.addNew({
+      ...info,
+      timeSpent,
+      spentAt,
+      note: summary || '',
+    });
+    return true;
+  }
+
+  /** Staged draft additions belonging to this issue (matched via issue URL). */
+  private draftsForIssue(drafts: DraftManager | null, projectPath: string, iid: string): DraftEntry[] {
+    if (!drafts) return [];
+    const suffix = `/${projectPath}/-/issues/${extractIidFromCacheKey(iid)}`;
+    return drafts.state.added.filter((a) => a.desired.issueUrl.endsWith(suffix));
   }
 
   private async loadTimelogs(
@@ -438,11 +517,16 @@ export class EditModeFeature {
       return;
     }
 
-    const timelogs = await fetchTimelogs(projectPath, extractIidFromCacheKey(iid));
+    const [timelogs, drafts] = await Promise.all([
+      fetchTimelogs(projectPath, extractIidFromCacheKey(iid)),
+      this.getDrafts(),
+    ]);
     // Check controls are still in the DOM (user may have closed edit mode)
     if (!controls.isConnected) return;
 
-    if (timelogs.length === 0) {
+    const staged = this.draftsForIssue(drafts, projectPath, iid);
+
+    if (timelogs.length === 0 && staged.length === 0) {
       container.innerHTML = '<span class="gn-timelogs-empty">No timelogs</span>';
       return;
     }
@@ -450,20 +534,28 @@ export class EditModeFeature {
     // Sort by spentAt descending (most recent first)
     timelogs.sort((a, b) => new Date(b.spentAt).getTime() - new Date(a.spentAt).getTime());
 
+    const draftRows = staged
+      .map((a) =>
+        this.renderTimelogRow(
+          { timeSpent: a.desired.timeSpent, spentAt: a.desired.spentAt, summary: a.desired.note, user: null },
+          true
+        )
+      )
+      .join('');
     const rows = timelogs.map((t) => this.renderTimelogRow(t)).join('');
-    container.innerHTML = `<div class="gn-timelogs-list">${rows}</div>`;
+    container.innerHTML = `<div class="gn-timelogs-list">${draftRows}${rows}</div>`;
     container.removeAttribute('data-loading');
   }
 
-  private renderTimelogRow(t: Timelog): string {
+  private renderTimelogRow(t: Timelog, isDraft = false): string {
     const date = new Date(t.spentAt);
     const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
     const hours = t.timeSpent / 3600;
     const duration = formatHours(hours);
-    const user = t.user?.name ?? '';
+    const user = isDraft ? 'draft' : (t.user?.name ?? '');
     const summary = t.summary ? this.escapeHtml(t.summary) : '';
 
-    return `<div class="gn-timelog-row">
+    return `<div class="gn-timelog-row${isDraft ? ' gn-timelog-draft' : ''}">
       <span class="gn-timelog-date">${dateStr}</span>
       <span class="gn-timelog-duration">${duration}</span>
       <span class="gn-timelog-user">${this.escapeHtml(user)}</span>

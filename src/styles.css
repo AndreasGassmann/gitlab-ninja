@@ -368,6 +368,30 @@ li.board-card.gn-effort-xl {
   box-shadow: 0 0 6px rgba(99, 102, 241, 0.5);
 }
 
+/* Pending draft timelogs indicator */
+.gn-draft-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.1);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--gn-font);
+  color: #b45309;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.gn-draft-indicator:hover {
+  border-color: rgba(251, 191, 36, 0.7);
+  background: rgba(251, 191, 36, 0.18);
+}
+
 /* Daily progress */
 .gn-daily-progress {
   display: flex;
@@ -816,6 +840,21 @@ div.board-card.gn-has-edit-controls {
   line-height: 1.6;
 }
 
+/* Staged (draft-mode) timelog rows — not yet sent to GitLab */
+.gn-timelog-row.gn-timelog-draft {
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.gn-timelog-row.gn-timelog-draft .gn-timelog-user {
+  color: #b45309;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
 .gn-timelog-date {
   font-family: var(--gn-font-mono);
   font-weight: 600;
@@ -1258,6 +1297,12 @@ div.board-card.gn-has-edit-controls {
 }
 .gl-dark .gn-daily-value {
   color: #a5a5be;
+}
+.gl-dark .gn-draft-indicator,
+.gn-force-dark .gn-draft-indicator,
+.gl-dark .gn-timelog-row.gn-timelog-draft .gn-timelog-user,
+.gn-force-dark .gn-timelog-row.gn-timelog-draft .gn-timelog-user {
+  color: #fbbf24;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

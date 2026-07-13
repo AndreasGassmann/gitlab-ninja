@@ -5,6 +5,7 @@
 
 import { debugLog } from '../utils/debug';
 import { getWorkSettings } from '../utils/workSettings';
+import { DraftManager } from '../utils/timelogDrafts';
 
 export type SettingsChangeCallback = (settings: BoardSettingsState) => void;
 
@@ -19,9 +20,11 @@ export class BoardSettingsFeature {
   private state: BoardSettingsState;
   private onChange: SettingsChangeCallback;
   private refreshTimer: number | null = null;
+  private draftsReady: Promise<DraftManager> | null = null;
 
-  constructor(onChange: SettingsChangeCallback) {
+  constructor(onChange: SettingsChangeCallback, draftsReady?: Promise<DraftManager>) {
     this.onChange = onChange;
+    this.draftsReady = draftsReady || null;
     this.state = this.loadState();
   }
 
@@ -63,7 +66,38 @@ export class BoardSettingsFeature {
     // Refresh every 60 seconds
     this.refreshTimer = window.setInterval(() => this.fetchTodayLogged(), 60000);
 
+    // Show pending draft timelogs (staged locally, not yet sent to GitLab)
+    this.initDraftIndicator();
+
     debugLog('GitLab Ninja: Settings toolbar inserted');
+  }
+
+  private async initDraftIndicator(): Promise<void> {
+    if (!this.draftsReady) return;
+    let drafts: DraftManager;
+    try {
+      drafts = await this.draftsReady;
+    } catch {
+      return;
+    }
+    this.updateDraftIndicator(drafts);
+    // Re-render whenever any context (this page, options page) stages/commits.
+    drafts.watch(() => this.updateDraftIndicator(drafts));
+  }
+
+  private updateDraftIndicator(drafts: DraftManager): void {
+    const chip = this.container?.querySelector<HTMLElement>('.gn-draft-indicator');
+    if (!chip) return;
+    // Pending drafts normally only exist while draft mode is on, but leftovers
+    // from a partially failed commit should stay visible either way.
+    const count = drafts.pendingCount();
+    if (count === 0) {
+      chip.style.display = 'none';
+      return;
+    }
+    chip.style.display = '';
+    chip.textContent = `${count} draft${count === 1 ? '' : 's'}`;
+    chip.title = `${count} staged timelog change${count === 1 ? '' : 's'} — open time planning to review & commit`;
   }
 
   private renderHTML(): string {
@@ -76,6 +110,7 @@ export class BoardSettingsFeature {
           </button>
         </div>
         <div class="gn-toolbar-status">
+          <button class="gn-draft-indicator" type="button" style="display:none"></button>
           <div class="gn-daily-progress">
             <span class="gn-daily-label">Today</span>
             <div class="gn-daily-bar">
@@ -196,6 +231,11 @@ export class BoardSettingsFeature {
       pill.classList.toggle('gn-active', this.state.autoAssign);
       this.saveState();
       this.onChange(this.state);
+    });
+
+    // Draft chip opens the time-planning view where drafts are reviewed/committed
+    this.container.querySelector('.gn-draft-indicator')?.addEventListener('click', () => {
+      window.open(chrome.runtime.getURL('options.html'));
     });
   }
 

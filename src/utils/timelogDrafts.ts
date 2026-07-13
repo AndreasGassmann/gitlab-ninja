@@ -14,8 +14,10 @@
  * a single diff against the original. Adding then deleting a new entry produces
  * zero mutations.
  *
- * This module is DOM-free (except localStorage) and carries no formatting — the
- * caller owns presentation.
+ * This module is DOM-free (except its storage backend: localStorage via
+ * init(), or chrome.storage.local via initShared() when state must be shared
+ * across extension contexts) and carries no formatting — the caller owns
+ * presentation.
  */
 
 export type DraftStatus = 'new' | 'modified' | 'deleted';
@@ -139,15 +141,69 @@ function detailToDesired(o: TimelogLike): DraftDesired {
 /** Field patch applied to a desired state. */
 export type DraftPatch = Partial<Pick<DraftDesired, 'timeSpent' | 'spentAt' | 'note'>>;
 
+/** Build the storage scope shared by every surface (options page, boards). */
+export function draftScope(gitlabUrl: string | null, username: string | null): string {
+  return `${(gitlabUrl || 'default').replace(/\/+$/, '')}|${username || ''}`;
+}
+
 export class DraftManager {
   state: DraftState = { enabled: false, nextId: 1, byOrigin: {}, added: [] };
   private key = STORAGE_PREFIX;
+  private shared = false;
+  private watchers: Array<() => void> = [];
 
   /** Bind to a localStorage key scoped per gitlab instance + user, and load. */
   init(scope: string): void {
     this.key = `${STORAGE_PREFIX}:${scope}`;
-    const raw = localStorage.getItem(this.key);
-    if (!raw) return;
+    this.adopt(localStorage.getItem(this.key));
+  }
+
+  /**
+   * Bind to chrome.storage.local instead, so the same staged state is visible
+   * from every extension context (options page, popup, content scripts on the
+   * gitlab tab). Migrates a legacy localStorage store when present.
+   */
+  async initShared(scope: string): Promise<void> {
+    this.key = `${STORAGE_PREFIX}:${scope}`;
+    this.shared = true;
+    let raw = await new Promise<string | null>((resolve) =>
+      chrome.storage.local.get(this.key, (items) => resolve(items[this.key] ?? null))
+    );
+    if (!raw && typeof localStorage !== 'undefined') {
+      raw = localStorage.getItem(this.key);
+      if (raw) {
+        chrome.storage.local.set({ [this.key]: raw });
+        localStorage.removeItem(this.key);
+      }
+    }
+    this.adopt(raw);
+  }
+
+  /**
+   * Reload state and invoke cb whenever another context writes this scope's
+   * drafts. Self-writes are ignored (their payload matches current state).
+   * Multiple watchers share one storage listener so each cb fires exactly
+   * once per external change.
+   */
+  watch(cb: () => void): void {
+    this.watchers.push(cb);
+    if (this.watchers.length > 1) return;
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      const change = changes[this.key];
+      if (!change) return;
+      const raw = change.newValue ?? null;
+      if (raw === JSON.stringify(this.state)) return;
+      this.adopt(raw);
+      this.watchers.forEach((w) => w());
+    });
+  }
+
+  private adopt(raw: string | null): void {
+    if (!raw) {
+      this.state = { enabled: false, nextId: 1, byOrigin: {}, added: [] };
+      return;
+    }
     try {
       const parsed = JSON.parse(raw);
       this.state = {
@@ -162,7 +218,9 @@ export class DraftManager {
   }
 
   persist(): void {
-    localStorage.setItem(this.key, JSON.stringify(this.state));
+    const raw = JSON.stringify(this.state);
+    if (this.shared) chrome.storage.local.set({ [this.key]: raw });
+    else localStorage.setItem(this.key, raw);
   }
 
   isEnabled(): boolean {
@@ -275,17 +333,44 @@ export class DraftManager {
   }
 }
 
+function desiredToDisplay(id: string, desired: DraftDesired, status: DraftStatus): TimelogLike & {
+  draftStatus?: DraftStatus;
+} {
+  return {
+    id,
+    issueIid: desired.issueIid,
+    issueTitle: desired.issueTitle,
+    issueUrl: desired.issueUrl,
+    issueGid: desired.issueGid,
+    projectName: desired.projectName,
+    projectId: desired.projectId,
+    note: desired.note,
+    timeSpent: desired.timeSpent,
+    spentAt: desired.spentAt,
+    issueState: desired.issueState,
+    timeEstimate: desired.timeEstimate,
+    totalTimeSpent: desired.totalTimeSpent,
+    draftStatus: status,
+  };
+}
+
 /**
  * Overlay drafts onto the fetched originals, tagging each result with its
  * draftStatus. Deleted originals are kept (tagged) so callers can show them
  * faded; callers exclude them from totals.
+ *
+ * byOrigin drafts whose original is NOT in `originals` are appended from their
+ * desired state: the fetch is range-scoped, so an entry dragged into another
+ * week must still surface when that week is viewed.
  */
 export function applyDrafts<T extends TimelogLike>(
   originals: T[],
   state: DraftState
 ): (T & { draftStatus?: DraftStatus })[] {
   const out: (T & { draftStatus?: DraftStatus })[] = [];
+  const seenOrigins = new Set<string>();
   for (const o of originals) {
+    seenOrigins.add(o.id);
     const d = state.byOrigin[o.id];
     if (!d) {
       out.push({ ...o });
@@ -301,25 +386,86 @@ export function applyDrafts<T extends TimelogLike>(
       });
     }
   }
+  for (const id in state.byOrigin) {
+    const d = state.byOrigin[id];
+    if (d.deleted || seenOrigins.has(id)) continue;
+    out.push(desiredToDisplay(id, d.desired, 'modified') as T & { draftStatus?: DraftStatus });
+  }
   for (const a of state.added) {
-    out.push({
-      id: a.draftId,
-      issueIid: a.desired.issueIid,
-      issueTitle: a.desired.issueTitle,
-      issueUrl: a.desired.issueUrl,
-      issueGid: a.desired.issueGid,
-      projectName: a.desired.projectName,
-      projectId: a.desired.projectId,
-      note: a.desired.note,
-      timeSpent: a.desired.timeSpent,
-      spentAt: a.desired.spentAt,
-      issueState: a.desired.issueState,
-      timeEstimate: a.desired.timeEstimate,
-      totalTimeSpent: a.desired.totalTimeSpent,
-      draftStatus: 'new',
-    } as T & { draftStatus?: DraftStatus });
+    out.push(desiredToDisplay(a.draftId, a.desired, 'new') as T & { draftStatus?: DraftStatus });
   }
   return out;
+}
+
+/**
+ * The GitLab-side operations commitPlan needs. The caller owns the actual
+ * network calls, duration formatting, and clearing a committed draft — this
+ * keeps the commit logic DOM/network-free and unit-testable.
+ */
+export interface CommitApi {
+  createTimelog(
+    issueGid: string,
+    durationStr: string,
+    spentAt: string,
+    note: string
+  ): Promise<void>;
+  deleteTimelog(timelogId: string): Promise<void>;
+  formatDuration(seconds: number): string;
+  clear(item: PlanItem): void;
+}
+
+export interface CommitResult {
+  ok: number;
+  failed: { item: PlanItem; error: string }[];
+  dupes: PlanItem[]; // created but old copy could not be deleted
+}
+
+/**
+ * Apply a mutation plan to GitLab. Each committed item is cleared as it
+ * succeeds, so a partial failure leaves only the failed items staged.
+ * A 'modify' is a create-then-delete pair: if the delete fails after the
+ * create succeeded, the old copy survives → flagged as a duplicate (and the
+ * draft is still cleared so a re-commit won't make yet another copy).
+ */
+export async function commitPlan(plan: PlanItem[], api: CommitApi): Promise<CommitResult> {
+  const result: CommitResult = { ok: 0, failed: [], dupes: [] };
+  for (const item of plan) {
+    try {
+      if (item.kind === 'add') {
+        await api.createTimelog(
+          item.desired.issueGid,
+          api.formatDuration(item.desired.timeSpent),
+          item.desired.spentAt,
+          item.desired.note
+        );
+        api.clear(item);
+        result.ok++;
+      } else if (item.kind === 'delete') {
+        await api.deleteTimelog(item.originId!);
+        api.clear(item);
+        result.ok++;
+      } else {
+        // modify: create the new entry first, then remove the old one.
+        await api.createTimelog(
+          item.desired.issueGid,
+          api.formatDuration(item.desired.timeSpent),
+          item.desired.spentAt,
+          item.desired.note
+        );
+        try {
+          await api.deleteTimelog(item.originId!);
+          api.clear(item);
+          result.ok++;
+        } catch {
+          api.clear(item);
+          result.dupes.push(item);
+        }
+      }
+    } catch (err: any) {
+      result.failed.push({ item, error: err?.message || String(err) });
+    }
+  }
+  return result;
 }
 
 /** Build the minimal mutation plan from the current draft state. */
