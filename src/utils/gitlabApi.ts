@@ -54,6 +54,36 @@ export async function setTimeEstimate(
 }
 
 /**
+ * Set (or clear, with null) the due date on an issue.
+ * dueDate is 'YYYY-MM-DD'; an empty string clears it on the REST API.
+ */
+export async function setDueDate(
+  projectPath: string,
+  issueIid: string,
+  dueDate: string | null
+): Promise<boolean> {
+  const csrfToken = getCsrfToken();
+  const encodedPath = encodeURIComponent(projectPath);
+
+  const response = await fetch(`/api/v4/projects/${encodedPath}/issues/${issueIid}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ due_date: dueDate ?? '' }),
+  });
+
+  if (!response.ok) {
+    debugError(`GitLab Ninja: Failed to set due date: ${response.status}`);
+    return false;
+  }
+
+  debugLog(`GitLab Ninja: Set due date to ${dueDate ?? '(cleared)'} on #${issueIid}`);
+  return true;
+}
+
+/**
  * Resolve an issue's global ID (gid://gitlab/Issue/NNN) from project path + IID.
  */
 async function resolveIssueGid(

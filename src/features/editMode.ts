@@ -18,6 +18,7 @@ import {
 import {
   extractProjectPath,
   setTimeEstimate,
+  setDueDate,
   addTimeSpent,
   formatDate,
   fetchTimelogs,
@@ -52,6 +53,28 @@ function buildDatePresets() {
     { label: `-1 ${DAY_ABBR[m1.getDay()]}`, date: m1, setTime: false },
     { label: `-2 ${DAY_ABBR[m2.getDay()]}`, date: m2, setTime: false },
   ];
+}
+
+/**
+ * Quick-pick targets for the due-date row: tomorrow, in 2 days, next Monday.
+ * Labels show the offset plus the weekday it lands on, e.g. "+1 We".
+ * Deduped by date (e.g. on Sunday "+1" already is next Monday).
+ */
+function buildDuePresets() {
+  const today = new Date();
+  const plus = (days: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+  const daysUntilNextMonday = (8 - today.getDay()) % 7 || 7;
+  const presets = [1, 2, daysUntilNextMonday].map((days) => {
+    const date = plus(days);
+    return { label: `+${days} ${DAY_ABBR[date.getDay()]}`, date };
+  });
+  return presets.filter(
+    (p, i) => presets.findIndex((q) => q.date.getTime() === p.date.getTime()) === i
+  );
 }
 
 function stopBubble(e: Event): void {
@@ -294,6 +317,13 @@ export class EditModeFeature {
 
     const spentStr = timeInfo.spent > 0 ? formatHours(timeInfo.spent) : '0h';
     const estStr = formatHours(timeInfo.estimate);
+    const currentDue = timeInfo.dueDate?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
+    const dueBtns = buildDuePresets()
+      .map(
+        (p) =>
+          `<button type="button" class="gn-date-btn gn-due-preset" data-date="${formatDate(p.date)}">${p.label}</button>`
+      )
+      .join('');
 
     controls.innerHTML = `
       <div class="gn-edit-row gn-edit-info">
@@ -316,6 +346,13 @@ export class EditModeFeature {
         <span class="gn-edit-label">Note:</span>
         <input type="text" class="gn-summary-input" placeholder="summary" />
         <button type="button" class="gn-submit-btn" disabled>Log</button>
+      </div>
+      <div class="gn-edit-row gn-due-row">
+        <span class="gn-edit-label">Due:</span>
+        <div class="gn-preset-group">${dueBtns}</div>
+        <input type="date" class="gn-date-picker gn-due-input" value="${currentDue}" />
+        <button type="button" class="gn-preset-btn gn-due-clear" title="Clear due date"${currentDue ? '' : ' disabled'}>×</button>
+        <button type="button" class="gn-submit-btn gn-due-save" disabled>Set</button>
       </div>
     `;
 
@@ -467,8 +504,88 @@ export class EditModeFeature {
       }
     });
 
+    this.bindDueDateControls(controls, card, iid, currentDue);
+
     // Fetch and render timelogs
     this.loadTimelogs(controls, card, iid);
+  }
+
+  /**
+   * Wire up the inline due-date row. Due date is an issue-level property
+   * (not a timelog), so it always mutates immediately — never staged as a draft.
+   */
+  private bindDueDateControls(
+    controls: HTMLElement,
+    card: HTMLElement,
+    iid: string,
+    currentDue: string
+  ): void {
+    const dueInput = controls.querySelector<HTMLInputElement>('.gn-due-input');
+    const clearBtn = controls.querySelector<HTMLButtonElement>('.gn-due-clear');
+    const saveBtn = controls.querySelector<HTMLButtonElement>('.gn-due-save');
+    if (!dueInput || !clearBtn || !saveBtn) return;
+
+    let selectedDue = currentDue;
+    const presetBtns = Array.from(
+      controls.querySelectorAll<HTMLButtonElement>('.gn-due-preset')
+    );
+    const syncButtons = () => {
+      saveBtn.disabled = selectedDue === currentDue;
+      clearBtn.disabled = !selectedDue;
+      presetBtns.forEach((b) => b.classList.toggle('gn-active', b.dataset.date === selectedDue));
+    };
+    syncButtons();
+
+    presetBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedDue = btn.dataset.date ?? selectedDue;
+        dueInput.value = selectedDue;
+        syncButtons();
+      });
+    });
+
+    dueInput.addEventListener('click', stopBubble);
+    dueInput.addEventListener('mousedown', stopBubble);
+    dueInput.addEventListener('focus', stopBubble);
+    dueInput.addEventListener('keydown', (e) => e.stopPropagation());
+    dueInput.addEventListener('change', (e) => {
+      e.stopPropagation();
+      selectedDue = dueInput.value;
+      syncButtons();
+    });
+
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dueInput.value = '';
+      selectedDue = '';
+      syncButtons();
+    });
+
+    saveBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (selectedDue === currentDue) return;
+
+      const projectPath = extractProjectPath(card);
+      if (!projectPath) return;
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = '...';
+
+      const ok = await setDueDate(
+        projectPath,
+        extractIidFromCacheKey(iid),
+        selectedDue || null
+      );
+      if (ok) {
+        const existing = getCachedTimeTracking(iid) || { spent: 0, estimate: 0 };
+        cacheTimeTracking(iid, { ...existing, dueDate: selectedDue || null });
+        this.refreshCard(card);
+      } else {
+        saveBtn.textContent = 'Set';
+        saveBtn.disabled = false;
+      }
+    });
   }
 
   /**

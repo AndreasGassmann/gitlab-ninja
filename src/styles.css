@@ -809,6 +809,29 @@ div.board-card.gn-has-edit-controls {
   padding: 0;
 }
 
+/* Due-date row: keep presets on one line, let the date input absorb the
+   shrink, and keep the clear button compact instead of flex-growing. */
+.gn-due-row .gn-preset-group {
+  flex: 0 0 auto;
+}
+
+.gn-due-row .gn-date-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.gn-due-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.gn-due-clear {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 3px 8px;
+}
+
 /* ── Timelogs List ──────────────────────────────────────────────── */
 .gn-timelogs {
   margin-bottom: 6px;
