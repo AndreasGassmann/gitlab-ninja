@@ -39,17 +39,24 @@ export function formatHours(hours: number): string {
   if (hours === 0) return '0h';
   const { hoursPerDay, hoursPerWeek } = getWorkSettings();
 
-  if (hours >= hoursPerWeek) {
-    const weeks = Math.floor(hours / hoursPerWeek);
-    const remainingHours = hours % hoursPerWeek;
-    return remainingHours > 0 ? `${weeks}w ${remainingHours}h` : `${weeks}w`;
-  }
+  // Work in whole minutes to avoid float artifacts like "0.16666666666666h"
+  let totalMinutes = Math.round(hours * 60);
+  if (totalMinutes === 0) return '0h';
 
-  if (hours >= hoursPerDay) {
-    const days = Math.floor(hours / hoursPerDay);
-    const remainingHours = hours % hoursPerDay;
-    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
-  }
+  const minutesPerDay = Math.round(hoursPerDay * 60);
+  const minutesPerWeek = Math.round(hoursPerWeek * 60);
 
-  return `${hours}h`;
+  const weeks = Math.floor(totalMinutes / minutesPerWeek);
+  totalMinutes %= minutesPerWeek;
+  const days = Math.floor(totalMinutes / minutesPerDay);
+  totalMinutes %= minutesPerDay;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (weeks > 0) parts.push(`${weeks}w`);
+  if (days > 0) parts.push(`${days}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  return parts.join(' ');
 }
