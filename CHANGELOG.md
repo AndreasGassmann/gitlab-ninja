@@ -2,6 +2,12 @@
 
 All notable changes to GitLab Ninja are documented here.
 
+## [1.4.1] - 2026-07-14
+
+### Security
+
+- Hardening improvements to how the extension renders data and handles links.
+
 ## [1.4.0] - 2026-07-14
 
 ### Added
