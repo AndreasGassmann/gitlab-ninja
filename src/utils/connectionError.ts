@@ -6,6 +6,8 @@
  * raw browser error onto the user.
  */
 
+import { escapeHtml } from './html';
+
 /** True when `err` looks like a network/connection failure (not an HTTP error). */
 export function isConnectionError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
@@ -21,12 +23,6 @@ function hostLabel(url: string | null | undefined): string {
   } catch {
     return url;
   }
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 export interface ConnectionErrorOptions {

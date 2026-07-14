@@ -2,6 +2,7 @@ import { loadThemeMode, ThemeMode } from './utils/themeManager';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from './utils/constants';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
 import { initWorkSettings } from './utils/workSettings';
+import { escapeHtml, safeUrl } from './utils/html';
 
 export {};
 
@@ -93,6 +94,20 @@ function detectFromUrl(url: string): TabInfo | null {
     return { gitlabUrl: parsed.origin, group };
   } catch {
     return null;
+  }
+}
+
+// The token is sent to whatever origin is stored as `lastGitlabUrl`. Only adopt
+// an auto-detected origin as that target if it's the public host or one the user
+// has already granted the extension access to — otherwise any page with a "/-/"
+// path could silently redirect the token to an attacker-controlled host.
+async function isTrustedGitlabOrigin(origin: string): Promise<boolean> {
+  try {
+    const o = new URL(origin).origin;
+    if (o === 'https://gitlab.com') return true;
+    return await chrome.permissions.contains({ origins: [`${o}/*`] });
+  } catch {
+    return false;
   }
 }
 
@@ -200,12 +215,6 @@ function highlightMatches(text: string, indices: number[]): string {
   }
   if (inMark) result += '</mark>';
   return result;
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 function renderDropdown(query: string) {
@@ -448,7 +457,10 @@ function renderTodayList(entries: TimelogEntry[]) {
       const labelsHtml =
         entry.labels.length > 0
           ? entry.labels
-              .map((l) => `<span class="today-label" data-label="${l.toLowerCase()}">${l}</span>`)
+              .map(
+                (l) =>
+                  `<span class="today-label" data-label="${escapeHtml(l.toLowerCase())}">${escapeHtml(l)}</span>`
+              )
               .join(' ')
           : '';
 
@@ -460,7 +472,7 @@ function renderTodayList(entries: TimelogEntry[]) {
       <div class="today-item">
         ${entry.timeEstimate > 0 ? renderProgressRing(pct) : renderProgressRing(0)}
         <div class="today-info">
-          <a class="today-title" href="${entry.issueUrl}" target="_blank" title="${entry.issueTitle}">#${entry.issueIid} ${entry.issueTitle}</a>
+          <a class="today-title" href="${escapeHtml(safeUrl(entry.issueUrl))}" target="_blank" title="${escapeHtml(entry.issueTitle)}">#${entry.issueIid} ${escapeHtml(entry.issueTitle)}</a>
           <div class="today-meta">${labelsHtml ? labelsHtml + ' &middot; ' : ''}${estLabel}</div>
           ${summaryHtml}
         </div>
@@ -613,7 +625,7 @@ async function createTicket() {
 
     const issueUrl = `${tabInfo.gitlabUrl}/${projectPath}/-/issues/${issue.iid}`;
     const el = $('statusMsg');
-    el.innerHTML = `Created <a href="${issueUrl}" target="_blank">#${issue.iid}</a>: ${escapeHtml(title)}`;
+    el.innerHTML = `Created <a href="${escapeHtml(issueUrl)}" target="_blank">#${issue.iid}</a>: ${escapeHtml(title)}`;
     el.className = 'status-msg success';
 
     // Save last used project
@@ -992,7 +1004,7 @@ function renderTemplateList() {
 
       return `
       <div class="quick-item" data-tpl-id="${tpl.id}">
-        <div class="quick-item-icon">${(tpl.name || '?').charAt(0).toUpperCase()}</div>
+        <div class="quick-item-icon">${escapeHtml((tpl.name || '?').charAt(0).toUpperCase())}</div>
         <div class="quick-item-info">
           <div class="quick-item-name">${escapeHtml(tpl.name)}</div>
           <div class="quick-item-meta">${escapeHtml(meta)}</div>
@@ -1224,7 +1236,7 @@ async function executeTemplateCreation(
 
     const issueUrl = `${tabInfo!.gitlabUrl}/${tpl.projectPath}/-/issues/${issue.iid}`;
     statusEl.className = 'quick-item-status done';
-    statusEl.innerHTML = `<a href="${issueUrl}" target="_blank" class="quick-issue-link">#${issue.iid}</a>`;
+    statusEl.innerHTML = `<a href="${escapeHtml(issueUrl)}" target="_blank" class="quick-issue-link">#${issue.iid}</a>`;
     item.style.pointerEvents = '';
     setTimeout(() => {
       statusEl.remove();
@@ -1405,9 +1417,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tab = await getCurrentTab();
   if (tab?.url) tabInfo = detectFromUrl(tab.url);
 
-  // Save detected URL, or fall back to saved URL
+  // Decide which origin the token may be sent to. Never let a passively detected
+  // origin replace a host the user already configured, and only adopt a new one
+  // if it's trusted (public host or already permission-granted).
   if (tabInfo) {
-    chrome.storage.sync.set({ lastGitlabUrl: tabInfo.gitlabUrl });
+    const detected = tabInfo.gitlabUrl;
+    if (detected === settings.gitlabUrl) {
+      // Already the configured host — keep the detected group context.
+    } else if (settings.gitlabUrl) {
+      // A host is already configured; don't let a different tab origin take over.
+      tabInfo = { gitlabUrl: settings.gitlabUrl, group: tabInfo.group };
+    } else if (await isTrustedGitlabOrigin(detected)) {
+      chrome.storage.sync.set({ lastGitlabUrl: detected });
+    } else {
+      // Unconfigured and untrusted origin — don't use it as a token target.
+      tabInfo = null;
+    }
   } else if (settings.gitlabUrl) {
     tabInfo = { gitlabUrl: settings.gitlabUrl, group: '' };
   }

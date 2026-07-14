@@ -29,6 +29,7 @@ import { formatHours } from '../utils/time';
 import { ESTIMATE_PRESETS, SPENT_PRESETS } from '../utils/constants';
 import { getWorkSettings } from '../utils/workSettings';
 import { DraftManager, DraftEntry, parseDurationToSeconds } from '../utils/timelogDrafts';
+import { escapeHtml } from '../utils/html';
 
 const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -670,18 +671,14 @@ export class EditModeFeature {
     const hours = t.timeSpent / 3600;
     const duration = formatHours(hours);
     const user = isDraft ? 'draft' : (t.user?.name ?? '');
-    const summary = t.summary ? this.escapeHtml(t.summary) : '';
+    const summary = t.summary ? escapeHtml(t.summary) : '';
 
     return `<div class="gn-timelog-row${isDraft ? ' gn-timelog-draft' : ''}">
       <span class="gn-timelog-date">${dateStr}</span>
       <span class="gn-timelog-duration">${duration}</span>
-      <span class="gn-timelog-user">${this.escapeHtml(user)}</span>
+      <span class="gn-timelog-user">${escapeHtml(user)}</span>
       ${summary ? `<span class="gn-timelog-summary">${summary}</span>` : ''}
     </div>`;
-  }
-
-  private escapeHtml(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   // ── Helpers ────────────────────────────────────────────────────────

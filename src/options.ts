@@ -25,6 +25,7 @@ import {
   commitPlan,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import { escapeHtml, safeUrl } from './utils/html';
 import {
   getWorkSettings,
   initWorkSettings,
@@ -139,29 +140,44 @@ async function loadSettings(): Promise<void> {
   if (boardGroupPath) ($('boardGroupPath') as HTMLInputElement).value = boardGroupPath;
 }
 
+// Only send the token to an origin the user has granted the extension access to
+// (or the public host). A passively detected tab origin may only be adopted as
+// the token target when it's trusted; otherwise it is prefilled for the user to
+// review and save (which triggers the host-permission prompt).
+async function isTrustedGitlabOrigin(origin: string): Promise<boolean> {
+  try {
+    const o = new URL(origin).origin;
+    if (o === 'https://gitlab.com') return true;
+    return await chrome.permissions.contains({ origins: [`${o}/*`] });
+  } catch {
+    return false;
+  }
+}
+
 async function detectGitlabUrl(): Promise<void> {
   if (gitlabUrl) return; // Already saved in settings
-  return new Promise((resolve) => {
-    chrome.tabs.query({}, (tabs) => {
-      for (const tab of tabs) {
-        if (tab.url) {
-          try {
-            const url = new URL(tab.url);
-            const parts = url.pathname.split('/').filter(Boolean);
-            if (parts.includes('-') && parts.length >= 3) {
-              gitlabUrl = url.origin;
-              chrome.storage.sync.set({ lastGitlabUrl: gitlabUrl });
-              if ($('gitlabUrl')) ($('gitlabUrl') as HTMLInputElement).value = gitlabUrl;
-              break;
-            }
-          } catch {
-            /* ignore */
-          }
+  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) =>
+    chrome.tabs.query({}, resolve)
+  );
+  for (const tab of tabs) {
+    if (!tab.url) continue;
+    try {
+      const url = new URL(tab.url);
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.includes('-') && parts.length >= 3) {
+        if (await isTrustedGitlabOrigin(url.origin)) {
+          gitlabUrl = url.origin;
+          chrome.storage.sync.set({ lastGitlabUrl: gitlabUrl });
         }
+        // Prefill the input regardless so the user can confirm and save.
+        const input = $('gitlabUrl') as HTMLInputElement | null;
+        if (input && !input.value) input.value = url.origin;
+        break;
       }
-      resolve();
-    });
-  });
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function parseBoardInput(raw: string, baseUrl: string): string | null {
@@ -737,7 +753,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
 
       html += `<tr class="issue-row">
         <td>
-          <a class="issue-link" href="${entry.issueUrl}" target="_blank">
+          <a class="issue-link" href="${escapeHtml(safeUrl(entry.issueUrl))}" target="_blank">
             <span class="issue-iid">#${entry.issueIid}</span>${escapeHtml(entry.issueTitle)}
           </a>
           ${entry.projectName ? `<div class="issue-project">${escapeHtml(entry.projectName)}</div>` : ''}
@@ -794,7 +810,7 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
         html += `<tr class="timelog-row timelog-add-row">
           <td colspan="5">
             <span class="timelog-indent"></span>
-            <button class="timelog-add-btn" data-issue-gid="${issueGid}" data-issue-url="${entry.issueUrl}">+ Add time log</button>
+            <button class="timelog-add-btn" data-issue-gid="${issueGid}" data-issue-url="${escapeHtml(safeUrl(entry.issueUrl))}">+ Add time log</button>
           </td>
         </tr>`;
       }
@@ -1100,12 +1116,6 @@ function renderWeek(entries: WeeklyTimelog[], days: Date[], filterDate: string |
       });
     });
   });
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 // ── Calendar Week View ──
