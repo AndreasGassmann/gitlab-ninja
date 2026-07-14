@@ -1796,7 +1796,7 @@ function showEditPopover(x: number, y: number, log: DisplayTimelog) {
   const popover = document.createElement('div');
   popover.className = 'cal-popover';
   popover.innerHTML = `
-    <div class="cal-popover-title">#${log.issueIid} ${escapeHtml(log.issueTitle)}</div>
+    <div class="cal-popover-title"><a class="issue-link" href="${escapeHtml(safeUrl(log.issueUrl))}" target="_blank" rel="noopener">#${log.issueIid}</a> ${escapeHtml(log.issueTitle)}</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;color:var(--text-muted, #aaa)">
       <span style="color:${stateColor};font-weight:600">${stateLabel}</span>
       <span>${escapeHtml(log.projectName)}</span>
