@@ -34,12 +34,25 @@ import {
   DEFAULT_WORK_SETTINGS,
   WorkSettings,
 } from './utils/workSettings';
+import {
+  AssignedIssue,
+  DEFAULT_REPORT_SETTINGS,
+  DueWindow,
+  ReportSettings,
+  buildReport,
+  dueDateCutoff,
+  dueSoonIssues,
+  loadReportSettings,
+  reportPeriodStart,
+  saveReportSettings,
+} from './utils/weeklyReport';
 
 interface WeeklyTimelog {
   issueIid: number;
   issueGid: string;
   issueTitle: string;
   issueUrl: string;
+  issueState: string; // opened, closed
   projectName: string;
   labels: string[];
   timeSpent: number;
@@ -156,9 +169,7 @@ async function isTrustedGitlabOrigin(origin: string): Promise<boolean> {
 
 async function detectGitlabUrl(): Promise<void> {
   if (gitlabUrl) return; // Already saved in settings
-  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) =>
-    chrome.tabs.query({}, resolve)
-  );
+  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => chrome.tabs.query({}, resolve));
   for (const tab of tabs) {
     if (!tab.url) continue;
     try {
@@ -423,6 +434,7 @@ function aggregateTimelogs(
         issueGid: log.issueGid,
         issueTitle: log.issueTitle,
         issueUrl: log.issueUrl,
+        issueState: log.issueState,
         projectName: log.projectName,
         labels: log.labels || [],
         timeSpent: log.timeSpent,
@@ -3336,6 +3348,152 @@ function initWorkSettingsForm(): void {
   });
 }
 
+/* ── Weekly Report ── */
+
+function readReportForm(): ReportSettings {
+  return {
+    template: ($('reportTemplate') as HTMLTextAreaElement).value,
+    itemTemplate:
+      ($('reportItemTemplate') as HTMLInputElement).value || DEFAULT_REPORT_SETTINGS.itemTemplate,
+    doneLabels: ($('reportDoneLabels') as HTMLInputElement).value,
+    emptyText:
+      ($('reportEmptyText') as HTMLInputElement).value || DEFAULT_REPORT_SETTINGS.emptyText,
+    dueWindow: ($('reportDueWindow') as HTMLSelectElement).value as DueWindow,
+    startDay: parseInt(($('reportStartDay') as HTMLSelectElement).value, 10),
+    ignoreTitles: ($('reportIgnoreTitles') as HTMLInputElement).value,
+  };
+}
+
+function populateReportForm(s: ReportSettings): void {
+  ($('reportTemplate') as HTMLTextAreaElement).value = s.template;
+  ($('reportItemTemplate') as HTMLInputElement).value = s.itemTemplate;
+  ($('reportDoneLabels') as HTMLInputElement).value = s.doneLabels;
+  ($('reportEmptyText') as HTMLInputElement).value = s.emptyText;
+  ($('reportDueWindow') as HTMLSelectElement).value = s.dueWindow;
+  ($('reportStartDay') as HTMLSelectElement).value = String(s.startDay);
+  ($('reportIgnoreTitles') as HTMLInputElement).value = s.ignoreTitles;
+}
+
+/** Open issues assigned to the current user, via REST (paginated). */
+async function fetchAssignedIssues(): Promise<AssignedIssue[]> {
+  const out: AssignedIssue[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await fetch(
+      `${gitlabUrl}/api/v4/issues?scope=assigned_to_me&state=opened&per_page=100&page=${page}`,
+      { headers: { 'PRIVATE-TOKEN': apiToken! } }
+    );
+    if (!res.ok) throw new Error(`API error (${res.status})`);
+    const batch: Array<{
+      iid: number;
+      title: string;
+      web_url: string;
+      state: string;
+      due_date: string | null;
+      labels?: string[];
+      references?: { full?: string };
+    }> = await res.json();
+    for (const i of batch) {
+      out.push({
+        issueIid: i.iid,
+        issueTitle: i.title,
+        issueUrl: i.web_url,
+        issueState: i.state,
+        projectName: i.references?.full?.split('#')[0].split('/').pop() || '',
+        labels: i.labels || [],
+        timeSpent: 0,
+        dueDate: i.due_date,
+      });
+    }
+    if (batch.length < 100) break;
+    page++;
+  }
+  return out;
+}
+
+function initReportSettings(): void {
+  loadReportSettings().then(populateReportForm);
+
+  const status = $('reportSaveStatus');
+  const panel = document.querySelector('[data-settings-tab-content="report"]');
+  panel?.addEventListener('change', () => {
+    saveReportSettings(readReportForm());
+    status.textContent = 'Saved';
+    setTimeout(() => (status.textContent = ''), 1500);
+  });
+
+  $('reportResetBtn').addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset report settings?',
+      body: 'This restores the report template and options to their defaults.',
+      confirmLabel: 'Reset to defaults',
+      danger: true,
+    });
+    if (!ok) return;
+    populateReportForm({ ...DEFAULT_REPORT_SETTINGS });
+    saveReportSettings({ ...DEFAULT_REPORT_SETTINGS });
+    status.textContent = 'Reset';
+    setTimeout(() => (status.textContent = ''), 1500);
+  });
+
+  $('reportGenerateBtn').addEventListener('click', () => generateReport());
+}
+
+async function generateReport(): Promise<void> {
+  if (!gitlabUrl || !apiToken) {
+    alert('Add your GitLab URL and API token in the Connection tab first.');
+    return;
+  }
+  const btn = $('reportGenerateBtn') as HTMLButtonElement;
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  try {
+    const settings = readReportForm();
+    // Period: most recent start day (default Monday) through today, regardless
+    // of the overview's week offset.
+    const now = new Date();
+    const start = reportPeriodStart(settings.startDay, now);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const cutoff = dueDateCutoff(settings.dueWindow);
+    const [{ entries }, assigned] = await Promise.all([
+      fetchWeekTimelogs(start, end),
+      cutoff ? fetchAssignedIssues() : Promise.resolve([]),
+    ]);
+    showReportModal(buildReport(entries, settings, dueSoonIssues(entries, assigned, cutoff)));
+  } catch (err: any) {
+    alert(`Failed to generate report: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Report';
+  }
+}
+
+function showReportModal(report: string): void {
+  const { modal, close } = openModal(`
+    <div class="gn-modal-title">Weekly report</div>
+    <div class="gn-modal-body">Edit freely — fill in manual sections, add items — then copy.</div>
+    <textarea
+      id="reportPreview"
+      class="form-input"
+      rows="20"
+      style="width: 100%; resize: vertical; font-family: monospace; font-size: 12px; margin-bottom: 14px"
+    ></textarea>
+    <div class="gn-modal-actions">
+      <button class="timelog-cancel-btn" data-act="cancel">Close</button>
+      <button class="timelog-save-btn" data-act="copy">Copy to clipboard</button>
+    </div>
+  `);
+  const textarea = modal.querySelector('#reportPreview') as HTMLTextAreaElement;
+  textarea.value = report;
+  modal.querySelector('[data-act="cancel"]')!.addEventListener('click', close);
+  modal.querySelector('[data-act="copy"]')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(textarea.value);
+    const btn = modal.querySelector('[data-act="copy"]') as HTMLButtonElement;
+    btn.textContent = 'Copied!';
+    setTimeout(() => (btn.textContent = 'Copy to clipboard'), 1500);
+  });
+}
+
 function initNotificationSettings(): void {
   loadNotificationSettings().then(populateNotificationForm);
 
@@ -3436,6 +3594,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSettingsTabs();
   initNotificationSettings();
   initWorkSettingsForm();
+  initReportSettings();
   renderThemeModeSelector();
   renderPresetRow();
   renderStatusColorPickers();
