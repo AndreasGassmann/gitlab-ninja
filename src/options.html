@@ -2258,6 +2258,44 @@
               <button class="btn-primary" id="saveBtn">Save Settings</button>
               <span class="save-status" id="saveStatus"></span>
             </div>
+
+            <div class="notif-card" style="margin-top: 24px">
+              <div class="settings-card-title">Export / Import</div>
+              <div class="form-hint" style="margin-bottom: 14px">
+                Transfer all settings, templates and notes to another browser or profile as a JSON
+                file. Drafts and other temporary state are not included.
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="exportIncludeToken" />
+                  <span class="toggle-slider"></span>
+                </label>
+                <div>
+                  <div style="font-weight: 600; font-size: 13px">Include API token</div>
+                  <div class="form-hint" style="margin-top: 2px">Off by default.</div>
+                </div>
+              </div>
+              <div
+                id="exportTokenWarning"
+                class="form-hint"
+                style="display: none; color: var(--red); margin-bottom: 10px"
+              >
+                Warning: the exported file will contain your GitLab API token in plain text. Anyone
+                with this file can access GitLab as you. Store it securely and delete it after
+                import.
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px">
+                <button class="btn-primary" id="exportBtn">Export</button>
+                <button class="reset-colors-btn" id="importBtn">Import…</button>
+                <input
+                  type="file"
+                  id="importFile"
+                  accept="application/json,.json"
+                  style="display: none"
+                />
+                <span class="save-status" id="transferStatus"></span>
+              </div>
+            </div>
           </div>
 
           <div class="settings-tab-content" data-settings-tab-content="work">

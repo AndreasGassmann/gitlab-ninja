@@ -25,6 +25,7 @@ import {
   commitPlan,
 } from './utils/timelogDrafts';
 import { isConnectionError, renderConnectionError } from './utils/connectionError';
+import { buildExport, parseImport, applyImport } from './utils/settingsTransfer';
 import { escapeHtml, safeUrl } from './utils/html';
 import {
   getWorkSettings,
@@ -3559,6 +3560,63 @@ function flashSaveStatus(text: string, ok: boolean) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
+function initSettingsTransfer() {
+  const includeToken = $('exportIncludeToken') as HTMLInputElement;
+  const warning = $('exportTokenWarning');
+  const fileInput = $('importFile') as HTMLInputElement;
+
+  const flash = (text: string, ok: boolean) => {
+    const el = $('transferStatus');
+    el.textContent = text;
+    el.className = `save-status show ${ok ? 'ok' : 'err'}`;
+    setTimeout(() => el.classList.remove('show'), 2500);
+  };
+
+  includeToken.addEventListener('change', () => {
+    warning.style.display = includeToken.checked ? 'block' : 'none';
+  });
+
+  $('exportBtn').addEventListener('click', async () => {
+    const bundle = await buildExport({
+      includeToken: includeToken.checked,
+      version: chrome.runtime.getManifest().version,
+      exportedAt: new Date().toISOString(),
+    });
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gitlab-ninja-export-${bundle.exportedAt.slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flash('Exported', true);
+  });
+
+  $('importBtn').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    let bundle;
+    try {
+      bundle = parseImport(await file.text());
+    } catch (e) {
+      flash(e instanceof Error ? e.message : 'Invalid file', false);
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'Import settings?',
+      body: 'Settings in the file will overwrite your current ones. The page reloads afterwards.',
+      confirmLabel: 'Import',
+      danger: true,
+    });
+    if (!ok) return;
+    await applyImport(bundle);
+    flash('Imported — reloading…', true);
+    setTimeout(() => location.reload(), 800);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   await initWorkSettings();
   await loadSettings();
@@ -3714,6 +3772,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.remove('apiToken');
     flashSaveStatus('Token cleared', true);
   });
+
+  initSettingsTransfer();
 
   $('myBoardBtn').addEventListener('click', () => {
     if (!gitlabUrl || !boardGroupPath) {
